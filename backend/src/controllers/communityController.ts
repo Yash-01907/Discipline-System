@@ -13,7 +13,7 @@ import mongoose from "mongoose";
 export const getCommunityFeed = async (req: Request, res: Response) => {
   try {
     // Get current user ID if authenticated (optional)
-    let currentUser = (req as any).user;
+    let currentUser = req.user;
 
     // Manual Token Check if not populated (since route is public)
     if (
@@ -172,7 +172,7 @@ export const toggleLike = async (req: Request, res: Response) => {
     // Check if user already liked this submission
     const existingLike = await Like.findOne({
       user: userId,
-      submission: submissionId,
+      submission: submissionId as any,
     });
 
     let isLiked: boolean;
@@ -186,13 +186,13 @@ export const toggleLike = async (req: Request, res: Response) => {
       // Like - add new like
       await Like.create({
         user: userId,
-        submission: submissionId,
+        submission: submissionId as any,
       });
       isLiked = true;
     }
 
     // Get updated like count
-    likeCount = await Like.countDocuments({ submission: submissionId });
+    likeCount = await Like.countDocuments({ submission: submissionId as any });
 
     res.json({
       success: true,
@@ -234,7 +234,7 @@ export const addComment = async (req: Request, res: Response) => {
     // Create comment
     const comment = await Comment.create({
       user: userId,
-      submission: submissionId,
+      submission: submissionId as any,
       text: text.trim(),
     });
 
@@ -243,7 +243,7 @@ export const addComment = async (req: Request, res: Response) => {
 
     // Get updated comment count
     const commentCount = await Comment.countDocuments({
-      submission: submissionId,
+      submission: submissionId as any,
     });
 
     res.status(201).json({
@@ -271,7 +271,7 @@ export const getComments = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = parseInt(req.query.skip as string) || 0;
 
-    const comments = await Comment.find({ submission: submissionId })
+    const comments = await Comment.find({ submission: submissionId as any })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

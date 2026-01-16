@@ -8,13 +8,13 @@ import { protect } from "../middleware/authMiddleware";
 
 const router = express.Router();
 
-// Get submissions for a habit
-router.get("/:habitId", protect, getHabitSubmissions);
+// Get all appealed submissions (for review/admin)
+router.get("/appeals/list", protect, getAppealedSubmissions);
 
 // Appeal a rejected submission
 router.post("/:submissionId/appeal", protect, appealSubmission);
 
-// Get all appealed submissions (for review/admin)
-router.get("/appeals/list", protect, getAppealedSubmissions);
+// Get submissions for a habit
+router.get("/:habitId", protect, getHabitSubmissions);
 
 export default router;

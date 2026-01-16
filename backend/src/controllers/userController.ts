@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
 import Habit from "../models/Habit";
+import Like from "../models/Like";
+import Comment from "../models/Comment";
 import "../types/express"; // Extend Express Request with user
 
 const generateToken = (id: string) => {
@@ -163,7 +165,11 @@ export const deleteUser = async (req: Request, res: Response) => {
     // 2. Delete Habits
     await Habit.deleteMany({ user: userId });
 
-    // 3. Delete User
+    // 3. Delete Interactions (Likes & Comments)
+    await Like.deleteMany({ user: userId });
+    await Comment.deleteMany({ user: userId });
+
+    // 4. Delete User
     await User.findByIdAndDelete(userId);
 
     res.status(200).json({ message: "Account deleted successfully" });

@@ -11,6 +11,7 @@ import webhookRoutes from "./routes/webhookRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import path from "path";
 import fs from "fs";
+import { errorHandler } from "./middleware/errorMiddleware";
 
 dotenv.config();
 
@@ -40,6 +41,8 @@ app.use("/api/admin", adminRoutes);
 app.get("/", (req, res) => {
   res.send("VeriHabit API is running");
 });
+
+app.use(errorHandler);
 
 // Database Connection
 connectDB();

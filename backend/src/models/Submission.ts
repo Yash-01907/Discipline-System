@@ -1,8 +1,8 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface ISubmission extends Document {
-  user: mongoose.Schema.Types.ObjectId;
-  habitId: mongoose.Schema.Types.ObjectId;
+  user: mongoose.Types.ObjectId;
+  habitId: mongoose.Types.ObjectId;
   imageUrl: string;
   aiVerificationResult: boolean;
   aiFeedback: string;

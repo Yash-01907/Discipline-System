@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface IHabit extends Document {
-  user: mongoose.Schema.Types.ObjectId;
+  user: mongoose.Types.ObjectId;
   title: string;
   description: string;
   type: "recurring" | "one-time";
