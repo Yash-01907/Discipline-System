@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { env } from "../config/env";
 
 export const errorHandler = (
   err: any,
@@ -12,6 +13,6 @@ export const errorHandler = (
 
   res.json({
     message: err.message,
-    stack: process.env.NODE_ENV === "production" ? null : err.stack,
+    stack: env.NODE_ENV === "production" ? null : err.stack,
   });
 };

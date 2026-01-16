@@ -84,14 +84,27 @@ export const verifySubmission = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error(error);
+
+    if (error.message === "SERVICE_UNAVAILABLE") {
+      return res.status(503).json({
+        success: false,
+        feedback: "AI service temporarily unavailable. Please try again later.",
+      });
+    }
+
     res.status(500).json({
       success: false,
       feedback: "Server Validation Error: " + error.message,
     });
   } finally {
-    // Ensure local file is always deleted
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    // Ensure local file is always deleted asynchronously
+    if (req.file) {
+      try {
+        await fs.promises.unlink(req.file.path);
+      } catch (err) {
+        // Ignore errors (e.g. file already deleted or not found)
+        console.error("Error cleaning up file:", err);
+      }
     }
   }
 };

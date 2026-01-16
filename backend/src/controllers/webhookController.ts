@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import User from "../models/User";
+import { env } from "../config/env";
 
 // @desc    Handle RevenueCat Webhooks
 // @route   POST /api/webhooks/revenuecat
@@ -7,7 +8,7 @@ import User from "../models/User";
 export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
-    const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+    const webhookSecret = env.REVENUECAT_WEBHOOK_SECRET;
 
     // 1. Verify Secret FIRST (Critical for Production)
     if (webhookSecret) {
@@ -24,10 +25,17 @@ export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
       console.warn("REVENUECAT_WEBHOOK_SECRET not set. Webhook is vulnerable.");
     }
 
-    const { event } = req.body;
+    // Safe Event Extraction (Handles potential v1/v2 payload differences)
+    let event = req.body.event;
 
-    if (!event) {
-      return res.status(400).json({ message: "Invalid payload" });
+    // If 'event' key doesn't exist, check if the body itself is the event
+    if (!event && req.body.type) {
+      event = req.body;
+    }
+
+    if (!event || !event.type) {
+      console.error("Invalid RevenueCat Payload:", JSON.stringify(req.body));
+      return res.status(400).json({ message: "Invalid payload structure" });
     }
 
     const { type, app_user_id } = event;

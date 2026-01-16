@@ -12,6 +12,7 @@ import {
   ScrollView,
   Modal,
 } from "react-native";
+import RNDateTimePicker from "@react-native-community/datetimepicker";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { RootStackParamList } from "../types/navigation";
@@ -40,6 +41,10 @@ const CreateHabitScreen = () => {
   const [selectedHour, setSelectedHour] = useState(9);
   const [selectedMinute, setSelectedMinute] = useState(0);
 
+  // One-time habit date picker state
+  const [targetDate, setTargetDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const handleTimeConfirm = () => {
     const time = formatTimeFor24Hour(selectedHour, selectedMinute);
     setReminderTime(time);
@@ -58,7 +63,7 @@ const CreateHabitScreen = () => {
         description,
         frequency,
         type,
-        targetDate: type === "one-time" ? new Date() : undefined,
+        targetDate: type === "one-time" ? targetDate : undefined,
         isPublic,
       },
       {
@@ -178,6 +183,56 @@ const CreateHabitScreen = () => {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        )}
+
+        {type === "one-time" && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>TARGET DATE</Text>
+            <TouchableOpacity
+              style={styles.toggleContainer}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text
+                style={[
+                  styles.input,
+                  { borderWidth: 0, backgroundColor: "transparent" },
+                ]}
+              >
+                {targetDate.toLocaleDateString(undefined, {
+                  weekday: "short",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <RNDateTimePicker
+                value={targetDate}
+                mode="date"
+                display="default"
+                onChange={(event: any, selectedDate?: Date) => {
+                  const currentDate = selectedDate || targetDate;
+                  if (Platform.OS === "android") {
+                    setShowDatePicker(false);
+                  }
+                  setTargetDate(currentDate);
+                }}
+                minimumDate={new Date()}
+              />
+            )}
+            {Platform.OS === "ios" && showDatePicker && (
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(false)}
+                style={{ alignSelf: "flex-end", marginTop: 10 }}
+              >
+                <Text style={{ color: COLORS.primary, fontWeight: "bold" }}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 

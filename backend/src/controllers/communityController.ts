@@ -6,6 +6,7 @@ import Comment from "../models/Comment";
 import User from "../models/User";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import { env } from "../config/env";
 
 // @desc    Get public community feed
 // @route   GET /api/community/feed
@@ -23,10 +24,7 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
     ) {
       try {
         const token = req.headers.authorization.split(" ")[1];
-        const decoded: any = jwt.verify(
-          token,
-          process.env.JWT_SECRET as string
-        );
+        const decoded: any = jwt.verify(token, env.JWT_SECRET);
         currentUser = await User.findById(decoded.id).select("blockedUsers");
       } catch (e) {
         // invalid token, ignore (treat as guest)
@@ -87,7 +85,7 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
           preserveNullAndEmptyArrays: false, // Filter out if user doesn't exist
         },
       },
-      // Lookup Likes
+      // Lookup Likes ONLY for isLiked check (not for counting)
       {
         $lookup: {
           from: "likes",
@@ -96,20 +94,9 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
           as: "likes",
         },
       },
-      // Lookup Comments
-      {
-        $lookup: {
-          from: "comments",
-          localField: "_id",
-          foreignField: "submission",
-          as: "comments",
-        },
-      },
-      // Add counts and isLiked
+      // Add isLiked (use denormalized likeCount/commentCount from document)
       {
         $addFields: {
-          likeCount: { $size: "$likes" },
-          commentCount: { $size: "$comments" },
           isLiked: {
             $in: [
               currentUserId ? new mongoose.Types.ObjectId(currentUserId) : null,
@@ -130,8 +117,8 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
           habitDescription: "$habitDetails.description",
           userName: "$userDetails.name",
           userId: "$userDetails._id",
-          likeCount: 1,
-          commentCount: 1,
+          likeCount: 1, // Denormalized field
+          commentCount: 1, // Denormalized field
           isLiked: 1,
         },
       },
@@ -177,20 +164,29 @@ export const toggleLike = async (req: Request, res: Response) => {
     let likeCount: number;
 
     if (existingLike) {
-      // Unlike - remove the like
+      // Unlike - remove the like and decrement count
       await Like.deleteOne({ _id: existingLike._id });
+      const updated = await Submission.findByIdAndUpdate(
+        submissionId,
+        { $inc: { likeCount: -1 } },
+        { new: true }
+      );
       isLiked = false;
+      likeCount = Math.max(0, updated?.likeCount || 0);
     } else {
-      // Like - add new like
+      // Like - add new like and increment count
       await Like.create({
         user: userId,
         submission: submissionId as any,
       });
+      const updated = await Submission.findByIdAndUpdate(
+        submissionId,
+        { $inc: { likeCount: 1 } },
+        { new: true }
+      );
       isLiked = true;
+      likeCount = updated?.likeCount || 1;
     }
-
-    // Get updated like count
-    likeCount = await Like.countDocuments({ submission: submissionId as any });
 
     res.json({
       success: true,
@@ -229,7 +225,7 @@ export const addComment = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Submission not found" });
     }
 
-    // Create comment
+    // Create comment and increment denormalized count
     const comment = await Comment.create({
       user: userId,
       submission: submissionId as any,
@@ -239,10 +235,12 @@ export const addComment = async (req: Request, res: Response) => {
     // Populate user info for response
     const populatedComment = await (comment as any).populate("user", "name");
 
-    // Get updated comment count
-    const commentCount = await Comment.countDocuments({
-      submission: submissionId as any,
-    });
+    // Increment denormalized comment count
+    const updated = await Submission.findByIdAndUpdate(
+      submissionId,
+      { $inc: { commentCount: 1 } },
+      { new: true }
+    );
 
     res.status(201).json({
       success: true,
@@ -252,7 +250,7 @@ export const addComment = async (req: Request, res: Response) => {
         userName: (populatedComment.user as any)?.name || "Anonymous",
         createdAt: populatedComment.createdAt,
       },
-      commentCount,
+      commentCount: updated?.commentCount || 1,
     });
   } catch (error: any) {
     console.error("Add Comment Error:", error);

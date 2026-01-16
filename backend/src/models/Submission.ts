@@ -13,6 +13,9 @@ export interface ISubmission extends Document {
   appealedAt?: Date;
   appealStatus: "none" | "pending" | "approved" | "rejected";
   isFlagged: boolean;
+  // Denormalized counts for performance
+  likeCount: number;
+  commentCount: number;
 }
 
 const SubmissionSchema: Schema = new Schema(
@@ -64,6 +67,15 @@ const SubmissionSchema: Schema = new Schema(
       type: Boolean,
       default: false,
     },
+    // Denormalized counts for performance
+    likeCount: {
+      type: Number,
+      default: 0,
+    },
+    commentCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -72,5 +84,14 @@ const SubmissionSchema: Schema = new Schema(
 
 // Index for querying appealed submissions
 SubmissionSchema.index({ isAppealed: 1, appealStatus: 1 });
+
+// Index for fetching submissions by habit (getHabitSubmissions)
+SubmissionSchema.index({ habitId: 1, createdAt: -1 });
+
+// Index for rate limiting queries (user + date range)
+SubmissionSchema.index({ user: 1, createdAt: -1 });
+
+// Index for community feed queries (timestamp sorted, filtered by public/flagged)
+SubmissionSchema.index({ timestamp: -1, isFlagged: 1 });
 
 export default mongoose.model<ISubmission>("Submission", SubmissionSchema);

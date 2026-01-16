@@ -211,6 +211,13 @@ const VerifyScreen = ({ route, navigation }: Props) => {
                 },
               ]
             );
+          } else if (error.response?.status === 503) {
+            // AI Service Unavailable
+            Alert.alert(
+              "Judge is Sleeping 💤",
+              "Our AI verification service is temporarily down. Please try again in a few minutes.",
+              [{ text: "OK", onPress: () => navigation.goBack() }]
+            );
           } else {
             // Server error - show the error message
             const errorMessage =

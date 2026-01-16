@@ -10,10 +10,11 @@ import {
   registerUserSchema,
   loginUserSchema,
 } from "../schemas/validationSchemas";
+import { env } from "../config/env";
 import "../types/express"; // Extend Express Request with user
 
 const generateToken = (id: string) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || "default_secret_for_dev", {
+  return jwt.sign({ id }, env.JWT_SECRET, {
     expiresIn: "30d",
   });
 };

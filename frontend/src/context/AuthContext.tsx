@@ -6,7 +6,11 @@ import React, {
   ReactNode,
 } from "react";
 import * as SecureStore from "expo-secure-store";
-import client from "../api/client";
+import client, {
+  setAuthToken,
+  clearAuthToken,
+  initializeAuthToken,
+} from "../api/client";
 
 interface User {
   _id: string;
@@ -34,10 +38,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const storedUser = await SecureStore.getItemAsync("userData");
-        const token = await SecureStore.getItemAsync("userToken");
+        // Initialize token cache from SecureStore
+        await initializeAuthToken();
 
-        if (storedUser && token) {
+        const storedUser = await SecureStore.getItemAsync("userData");
+
+        if (storedUser) {
           // Optional: Validate token with backend /me endpoint here
           setUser(JSON.parse(storedUser));
         }
@@ -59,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data } = await client.post("/users/login", { email, password });
 
       setUser(data);
-      await SecureStore.setItemAsync("userToken", data.token);
+      await setAuthToken(data.token); // Updates both cache and SecureStore
       await SecureStore.setItemAsync("userData", JSON.stringify(data));
     } catch (error: any) {
       console.error("Login failed", error.response?.data || error.message);
@@ -75,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data } = await client.post("/users", { name, email, password });
 
       setUser(data);
-      await SecureStore.setItemAsync("userToken", data.token);
+      await setAuthToken(data.token); // Updates both cache and SecureStore
       await SecureStore.setItemAsync("userData", JSON.stringify(data));
     } catch (error: any) {
       console.error("Register failed", error.response?.data || error.message);
@@ -88,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     setIsLoading(true);
     try {
-      await SecureStore.deleteItemAsync("userToken");
+      await clearAuthToken(); // Clears both cache and SecureStore
       await SecureStore.deleteItemAsync("userData");
       setUser(null);
     } catch (e) {

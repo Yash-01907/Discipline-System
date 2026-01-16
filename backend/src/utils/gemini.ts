@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
+import { env } from "../config/env";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
   model: "gemini-1.5-flash",
   generationConfig: { responseMimeType: "application/json" },
@@ -116,6 +117,7 @@ export const verifyImageWithGemini = async (
     }
   } catch (error) {
     console.error("Gemini Verification Error:", error);
-    return { verified: false, reason: "AI verification service unavailable." };
+    // Throw error to allow controller to handle 503 Service Unavailable
+    throw new Error("SERVICE_UNAVAILABLE");
   }
 };

@@ -15,9 +15,10 @@ export const getHabits = async (req: Request, res: Response) => {
 
     const userTimezone = (req.headers["x-timezone"] as string) || "UTC";
 
-    for (const habit of habits) {
-      await checkAndResetStreak(habit, userTimezone);
-    }
+    // Parallelize streak checks to improve performance
+    await Promise.all(
+      habits.map((habit) => checkAndResetStreak(habit, userTimezone))
+    );
 
     res.json(habits);
   } catch (error: any) {

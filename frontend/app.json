@@ -39,7 +39,8 @@
           "color": "#4F46E5",
           "sounds": []
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "discipline"
   }

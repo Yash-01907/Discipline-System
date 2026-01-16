@@ -25,6 +25,32 @@ const getBackendUrl = () => {
   return "http://localhost:5000/api";
 };
 
+// ===== Token Cache (Memory) =====
+// Avoids repeated SecureStore native bridge calls on every request
+let cachedToken: string | null = null;
+
+export const setAuthToken = async (token: string) => {
+  cachedToken = token;
+  await SecureStore.setItemAsync("userToken", token);
+};
+
+export const clearAuthToken = async () => {
+  cachedToken = null;
+  await SecureStore.deleteItemAsync("userToken");
+};
+
+export const getAuthToken = () => cachedToken;
+
+// Call this once on app startup to hydrate the cache
+export const initializeAuthToken = async () => {
+  try {
+    cachedToken = await SecureStore.getItemAsync("userToken");
+  } catch (error) {
+    console.log("Error initializing token from SecureStore", error);
+  }
+};
+// ================================
+
 const client = axios.create({
   baseURL: getBackendUrl(),
   headers: {
@@ -32,16 +58,11 @@ const client = axios.create({
   },
 });
 
-// Add a request interceptor to inject the token
+// Add a request interceptor to inject the token (uses cached token)
 client.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await SecureStore.getItemAsync("userToken");
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (error) {
-      console.log("Error fetching token", error);
+  (config) => {
+    if (cachedToken) {
+      config.headers.Authorization = `Bearer ${cachedToken}`;
     }
     return config;
   },
