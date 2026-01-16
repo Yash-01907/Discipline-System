@@ -17,8 +17,41 @@ export const verifySubmission = async (req: Request, res: Response) => {
   }
 
   const { habitId } = req.body;
+  const user = req.user as any;
 
   try {
+    // 0. CHECK RATE LIMITS
+    // Pro plan: Unlimited (or higher limit)
+    // Free plan: 3 per day
+    if (user.plan === "free") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const dailyCount = await Submission.countDocuments({
+        user: user._id,
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow,
+        },
+      });
+
+      if (dailyCount >= 3) {
+        // Delete uploaded file if we're rejecting (middleware might have already processed it)
+        if (req.file && fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        return res.status(403).json({
+          success: false,
+          feedback:
+            "Daily Limit Reached (3/3). Upgrade to Pro for unlimited verifications.",
+        });
+      }
+    }
+
     // 1. Find Habit (and ensure ownership)
     const habit = await Habit.findOne({
       _id: habitId,
@@ -61,7 +94,7 @@ export const verifySubmission = async (req: Request, res: Response) => {
     }
 
     // 6. Log Submission
-    await Submission.create({
+    const submission = await Submission.create({
       user: req.user!.id as any,
       habitId,
       imageUrl,
@@ -73,6 +106,7 @@ export const verifySubmission = async (req: Request, res: Response) => {
       success: verification.verified,
       feedback: verification.reason,
       streak: habit.currentStreak,
+      submissionId: submission._id, // Return for appeal functionality
     });
   } catch (error: any) {
     console.error(error);

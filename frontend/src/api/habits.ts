@@ -13,6 +13,13 @@ export interface Habit {
   createdAt: string;
 }
 
+export interface VerifyResponse {
+  success: boolean;
+  feedback: string;
+  streak?: number;
+  submissionId?: string;
+}
+
 export const fetchHabits = async (): Promise<Habit[]> => {
   const { data } = await client.get("/habits");
   return data;
@@ -30,7 +37,10 @@ export const createHabit = async (habit: {
   return data;
 };
 
-export const verifySubmission = async (habitId: string, imageUri: string) => {
+export const verifySubmission = async (
+  habitId: string,
+  imageUri: string
+): Promise<VerifyResponse> => {
   const formData = new FormData();
 
   // React Native FormData requires specific object structure for files
@@ -46,6 +56,16 @@ export const verifySubmission = async (habitId: string, imageUri: string) => {
     headers: {
       "Content-Type": "multipart/form-data",
     },
+  });
+  return data;
+};
+
+export const appealSubmission = async (
+  submissionId: string,
+  reason?: string
+): Promise<{ success: boolean; message: string; appealStatus?: string }> => {
+  const { data } = await client.post(`/submissions/${submissionId}/appeal`, {
+    reason,
   });
   return data;
 };

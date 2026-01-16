@@ -7,6 +7,7 @@ export interface IUser extends Document {
   password: string;
   createdAt: Date;
   updatedAt: Date;
+  plan: "free" | "pro";
 }
 
 const userSchema = new mongoose.Schema(
@@ -23,6 +24,11 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Please add a password"],
+    },
+    plan: {
+      type: String,
+      enum: ["free", "pro"],
+      default: "free",
     },
   },
   {

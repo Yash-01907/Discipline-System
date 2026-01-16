@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
 } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
@@ -17,6 +18,7 @@ import { RootStackParamList } from "../types/navigation";
 import { useCreateHabit } from "../hooks/useHabits";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { scheduleHabitReminder } from "../utils/notifications";
 
 type CreateHabitScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -32,8 +34,30 @@ const CreateHabitScreen = () => {
   const [type, setType] = useState<"recurring" | "one-time">("recurring");
   const [frequency, setFrequency] = useState("Daily");
   const [isPublic, setIsPublic] = useState(false);
+  const [reminderTime, setReminderTime] = useState<string | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedHour, setSelectedHour] = useState(9);
+  const [selectedMinute, setSelectedMinute] = useState(0);
 
-  const handleSubmit = () => {
+  const formatTime = (hour: number, minute: number): string => {
+    const period = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
+  };
+
+  const formatTimeFor24Hour = (hour: number, minute: number): string => {
+    return `${hour.toString().padStart(2, "0")}:${minute
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  const handleTimeConfirm = () => {
+    const time = formatTimeFor24Hour(selectedHour, selectedMinute);
+    setReminderTime(time);
+    setShowTimePicker(false);
+  };
+
+  const handleSubmit = async () => {
     if (!title || !description) {
       Alert.alert("Error", "Please fill in all fields");
       return;
@@ -49,7 +73,11 @@ const CreateHabitScreen = () => {
         isPublic,
       },
       {
-        onSuccess: () => {
+        onSuccess: async (data: any) => {
+          // Schedule notification if reminder time is set
+          if (reminderTime && data._id) {
+            await scheduleHabitReminder(data._id, title, reminderTime);
+          }
           Alert.alert("Success", "Commitment locked in.");
           navigation.goBack();
         },
@@ -182,6 +210,43 @@ const CreateHabitScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Reminder Time Section */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>DAILY REMINDER</Text>
+          <TouchableOpacity
+            style={styles.reminderToggle}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Text style={styles.reminderIcon}>⏰</Text>
+            <View style={styles.reminderTextContainer}>
+              <Text style={styles.reminderTitle}>
+                {reminderTime
+                  ? `Reminder at ${formatTime(
+                      parseInt(reminderTime.split(":")[0]),
+                      parseInt(reminderTime.split(":")[1])
+                    )}`
+                  : "Set a daily reminder"}
+              </Text>
+              <Text style={styles.reminderSubtitle}>
+                {reminderTime
+                  ? "Tap to change time"
+                  : "Get notified to complete your habit"}
+              </Text>
+            </View>
+            {reminderTime && (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setReminderTime(null);
+                }}
+                style={styles.clearButton}
+              >
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
           style={styles.submitButton}
           onPress={handleSubmit}
@@ -194,6 +259,103 @@ const CreateHabitScreen = () => {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Time Picker Modal */}
+      <Modal
+        visible={showTimePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Set Reminder Time</Text>
+
+            <View style={styles.timePickerContainer}>
+              {/* Hour Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Hour</Text>
+                <ScrollView
+                  style={styles.pickerScrollView}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                    <TouchableOpacity
+                      key={hour}
+                      style={[
+                        styles.pickerItem,
+                        selectedHour === hour && styles.pickerItemSelected,
+                      ]}
+                      onPress={() => setSelectedHour(hour)}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerItemText,
+                          selectedHour === hour &&
+                            styles.pickerItemTextSelected,
+                        ]}
+                      >
+                        {hour.toString().padStart(2, "0")}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <Text style={styles.timeSeparator}>:</Text>
+
+              {/* Minute Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Minute</Text>
+                <ScrollView
+                  style={styles.pickerScrollView}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {Array.from({ length: 60 }, (_, i) => i).map((minute) => (
+                    <TouchableOpacity
+                      key={minute}
+                      style={[
+                        styles.pickerItem,
+                        selectedMinute === minute && styles.pickerItemSelected,
+                      ]}
+                      onPress={() => setSelectedMinute(minute)}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerItemText,
+                          selectedMinute === minute &&
+                            styles.pickerItemTextSelected,
+                        ]}
+                      >
+                        {minute.toString().padStart(2, "0")}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <Text style={styles.selectedTimePreview}>
+              {formatTime(selectedHour, selectedMinute)}
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowTimePicker(false)}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleTimeConfirm}
+              >
+                <Text style={styles.modalButtonConfirmText}>Set Reminder</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -357,6 +519,147 @@ const styles = StyleSheet.create({
   privacySubtitle: {
     color: COLORS.textSecondary,
     fontSize: 12,
+  },
+  // Reminder Time Styles
+  reminderToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    padding: SPACING.m,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  reminderIcon: {
+    fontSize: 24,
+    marginRight: SPACING.m,
+  },
+  reminderTextContainer: {
+    flex: 1,
+  },
+  reminderTitle: {
+    color: COLORS.text,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  reminderSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  clearButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  clearButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.xl,
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: SPACING.xl,
+    width: "100%",
+    maxWidth: 350,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.text,
+    textAlign: "center",
+    marginBottom: SPACING.l,
+  },
+  timePickerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: SPACING.l,
+  },
+  pickerColumn: {
+    alignItems: "center",
+    width: 80,
+  },
+  pickerLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: "bold",
+    marginBottom: SPACING.s,
+    letterSpacing: 1,
+  },
+  pickerScrollView: {
+    height: 150,
+  },
+  pickerItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginVertical: 2,
+  },
+  pickerItemSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  pickerItemText: {
+    color: COLORS.textSecondary,
+    fontSize: 18,
+    textAlign: "center",
+  },
+  pickerItemTextSelected: {
+    color: "#FFF",
+    fontWeight: "bold",
+  },
+  timeSeparator: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginHorizontal: SPACING.m,
+    marginTop: SPACING.l,
+  },
+  selectedTimePreview: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    textAlign: "center",
+    marginBottom: SPACING.l,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: SPACING.m,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: SPACING.m,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalButtonConfirm: {
+    backgroundColor: COLORS.primary,
+  },
+  modalButtonCancelText: {
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  modalButtonConfirmText: {
+    color: "#FFF",
+    fontWeight: "bold",
   },
 });
 

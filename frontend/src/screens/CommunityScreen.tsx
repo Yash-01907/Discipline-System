@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,30 +7,41 @@ import {
   Image,
   ActivityIndicator,
   Dimensions,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import client from "../api/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
+import {
+  FeedItem,
+  Comment,
+  fetchCommunityFeed,
+  toggleLike,
+  addComment,
+  fetchComments,
+} from "../api/community";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import FireAnimation from "../components/FireAnimation";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-interface FeedItem {
-  _id: string;
-  imageUrl: string;
-  habitTitle: string;
-  habitDescription: string;
-  userName: string;
-  aiFeedback: string;
-  timestamp: string;
-}
-
-const fetchCommunityFeed = async (): Promise<FeedItem[]> => {
-  const { data } = await client.get("/community/feed");
-  return data;
-};
-
 const CommunityScreen = () => {
+  const queryClient = useQueryClient();
+  const [showFireAnimation, setShowFireAnimation] = useState<string | null>(
+    null
+  );
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<FeedItem | null>(
+    null
+  );
+  const [commentText, setCommentText] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
   const {
     data: feed,
     isLoading,
@@ -39,6 +50,123 @@ const CommunityScreen = () => {
     queryKey: ["communityFeed"],
     queryFn: fetchCommunityFeed,
   });
+
+  // Like mutation with optimistic update
+  const likeMutation = useMutation({
+    mutationFn: toggleLike,
+    onMutate: async (submissionId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["communityFeed"] });
+
+      // Snapshot current data
+      const previousFeed = queryClient.getQueryData<FeedItem[]>([
+        "communityFeed",
+      ]);
+
+      // Optimistically update
+      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) => {
+        if (!old) return old;
+        return old.map((item) => {
+          if (item._id === submissionId) {
+            const newIsLiked = !item.isLiked;
+            return {
+              ...item,
+              isLiked: newIsLiked,
+              likeCount: item.likeCount + (newIsLiked ? 1 : -1),
+            };
+          }
+          return item;
+        });
+      });
+
+      return { previousFeed };
+    },
+    onError: (err, submissionId, context) => {
+      // Rollback on error
+      if (context?.previousFeed) {
+        queryClient.setQueryData(["communityFeed"], context.previousFeed);
+      }
+    },
+    onSettled: () => {
+      // Refetch to sync with server
+      queryClient.invalidateQueries({ queryKey: ["communityFeed"] });
+    },
+  });
+
+  // Comment mutation
+  const commentMutation = useMutation({
+    mutationFn: ({
+      submissionId,
+      text,
+    }: {
+      submissionId: string;
+      text: string;
+    }) => addComment(submissionId, text),
+    onSuccess: (data) => {
+      // Add new comment to local list
+      setComments((prev) => [data.comment, ...prev]);
+      setCommentText("");
+
+      // Update comment count in feed
+      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) => {
+        if (!old) return old;
+        return old.map((item) => {
+          if (item._id === selectedSubmission?._id) {
+            return { ...item, commentCount: data.commentCount };
+          }
+          return item;
+        });
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  const handleLike = useCallback(
+    (item: FeedItem) => {
+      // Show fire animation only when liking (not unliking)
+      if (!item.isLiked) {
+        setShowFireAnimation(item._id);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      likeMutation.mutate(item._id);
+    },
+    [likeMutation]
+  );
+
+  const openComments = useCallback(async (item: FeedItem) => {
+    setSelectedSubmission(item);
+    setCommentModalVisible(true);
+    setLoadingComments(true);
+
+    try {
+      const fetchedComments = await fetchComments(item._id);
+      setComments(fetchedComments);
+    } catch (error) {
+      console.error("Failed to load comments:", error);
+    } finally {
+      setLoadingComments(false);
+    }
+  }, []);
+
+  const closeComments = useCallback(() => {
+    setCommentModalVisible(false);
+    setSelectedSubmission(null);
+    setComments([]);
+    setCommentText("");
+  }, []);
+
+  const submitComment = useCallback(() => {
+    if (!commentText.trim() || !selectedSubmission) return;
+
+    commentMutation.mutate({
+      submissionId: selectedSubmission._id,
+      text: commentText.trim(),
+    });
+  }, [commentText, selectedSubmission, commentMutation]);
 
   if (isLoading) {
     return (
@@ -58,6 +186,12 @@ const CommunityScreen = () => {
 
   const renderItem = ({ item }: { item: FeedItem }) => (
     <View style={styles.card}>
+      {/* Fire Animation Overlay */}
+      <FireAnimation
+        visible={showFireAnimation === item._id}
+        onAnimationEnd={() => setShowFireAnimation(null)}
+      />
+
       <Image source={{ uri: item.imageUrl }} style={styles.image} />
       <View style={styles.cardContent}>
         <View style={styles.headerRow}>
@@ -71,15 +205,61 @@ const CommunityScreen = () => {
           <Text style={styles.verdictLabel}>AI VERDICT:</Text>
           <Text style={styles.verdictText}>"{item.aiFeedback}"</Text>
         </View>
-        <Text style={styles.timestamp}>
-          {new Date(item.timestamp).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
+
+        {/* Interaction Row */}
+        <View style={styles.interactionRow}>
+          <TouchableOpacity
+            style={styles.interactionButton}
+            onPress={() => handleLike(item)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.interactionIcon}>
+              {item.isLiked ? "❤️" : "🤍"}
+            </Text>
+            <Text
+              style={[
+                styles.interactionCount,
+                item.isLiked && styles.interactionCountActive,
+              ]}
+            >
+              {item.likeCount}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.interactionButton}
+            onPress={() => openComments(item)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.interactionIcon}>💬</Text>
+            <Text style={styles.interactionCount}>{item.commentCount}</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.timestamp}>
+            {new Date(item.timestamp).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+        </View>
       </View>
+    </View>
+  );
+
+  const renderComment = ({ item }: { item: Comment }) => (
+    <View style={styles.commentItem}>
+      <Text style={styles.commentUserName}>{item.userName}</Text>
+      <Text style={styles.commentText}>{item.text}</Text>
+      <Text style={styles.commentTime}>
+        {new Date(item.createdAt).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </Text>
     </View>
   );
 
@@ -103,6 +283,78 @@ const CommunityScreen = () => {
           </Text>
         </View>
       )}
+
+      {/* Comments Modal */}
+      <Modal
+        visible={commentModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeComments}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Comments</Text>
+              <TouchableOpacity onPress={closeComments}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Comments List */}
+            {loadingComments ? (
+              <View style={styles.commentsLoading}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              </View>
+            ) : comments.length === 0 ? (
+              <View style={styles.noComments}>
+                <Text style={styles.noCommentsText}>
+                  No comments yet. Be the first!
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={comments}
+                keyExtractor={(item) => item._id}
+                renderItem={renderComment}
+                style={styles.commentsList}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+
+            {/* Comment Input */}
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Add a comment..."
+                placeholderTextColor={COLORS.textSecondary}
+                value={commentText}
+                onChangeText={setCommentText}
+                maxLength={500}
+                multiline
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (!commentText.trim() || commentMutation.isPending) &&
+                    styles.sendButtonDisabled,
+                ]}
+                onPress={submitComment}
+                disabled={!commentText.trim() || commentMutation.isPending}
+              >
+                {commentMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Send</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -181,7 +433,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: SPACING.s,
     borderRadius: 8,
-    marginBottom: SPACING.s,
+    marginBottom: SPACING.m,
   },
   verdictLabel: {
     fontSize: 10,
@@ -194,9 +446,38 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontStyle: "italic",
   },
+  interactionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.m,
+  },
+  interactionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: SPACING.l,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.s,
+    borderRadius: 8,
+    backgroundColor: COLORS.background,
+  },
+  interactionIcon: {
+    fontSize: 20,
+    marginRight: SPACING.xs,
+  },
+  interactionCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  interactionCountActive: {
+    color: COLORS.error,
+  },
   timestamp: {
     fontSize: 12,
     color: COLORS.textSecondary,
+    marginLeft: "auto",
   },
   emptyContainer: {
     flex: 1,
@@ -223,6 +504,109 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.error,
     fontSize: 16,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+    paddingBottom: Platform.OS === "ios" ? 34 : SPACING.m,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: SPACING.m,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.text,
+  },
+  modalClose: {
+    fontSize: 24,
+    color: COLORS.textSecondary,
+    padding: SPACING.xs,
+  },
+  commentsLoading: {
+    padding: SPACING.xl,
+    alignItems: "center",
+  },
+  noComments: {
+    padding: SPACING.xl,
+    alignItems: "center",
+  },
+  noCommentsText: {
+    color: COLORS.textSecondary,
+    fontStyle: "italic",
+  },
+  commentsList: {
+    flex: 1,
+    paddingHorizontal: SPACING.m,
+  },
+  commentItem: {
+    paddingVertical: SPACING.m,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  commentUserName: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  commentText: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 20,
+    marginBottom: SPACING.xs,
+  },
+  commentTime: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  commentInputContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    padding: SPACING.m,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  commentInput: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
+    fontSize: 14,
+    color: COLORS.text,
+    maxHeight: 100,
+    marginRight: SPACING.s,
+  },
+  sendButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.m,
+    paddingVertical: SPACING.s,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 60,
+  },
+  sendButtonDisabled: {
+    backgroundColor: COLORS.border,
+  },
+  sendButtonText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    fontSize: 14,
   },
 });
 

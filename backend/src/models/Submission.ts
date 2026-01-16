@@ -7,6 +7,11 @@ export interface ISubmission extends Document {
   aiVerificationResult: boolean;
   aiFeedback: string;
   timestamp: Date;
+  // Appeal fields
+  isAppealed: boolean;
+  appealReason?: string;
+  appealedAt?: Date;
+  appealStatus: "none" | "pending" | "approved" | "rejected";
 }
 
 const SubmissionSchema: Schema = new Schema(
@@ -37,10 +42,30 @@ const SubmissionSchema: Schema = new Schema(
       type: Date,
       default: Date.now,
     },
+    // Appeal fields
+    isAppealed: {
+      type: Boolean,
+      default: false,
+    },
+    appealReason: {
+      type: String,
+      maxlength: 500,
+    },
+    appealedAt: {
+      type: Date,
+    },
+    appealStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Index for querying appealed submissions
+SubmissionSchema.index({ isAppealed: 1, appealStatus: 1 });
 
 export default mongoose.model<ISubmission>("Submission", SubmissionSchema);

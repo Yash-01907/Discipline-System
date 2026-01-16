@@ -6,6 +6,7 @@ export const COLORS = {
   text: "#1F2937", // Gray-900 - Dark Gray text
   textSecondary: "#6B7280", // Gray-500 - Soft Gray text
   success: "#10B981",
+  warning: "#F59E0B", // Amber-500 - Warning/Pending
   error: "#EF4444", // Red-500
   border: "#E5E7EB", // Gray-200
   tabBar: "#FFFFFF",

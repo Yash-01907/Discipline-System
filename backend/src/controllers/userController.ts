@@ -109,11 +109,39 @@ export const getUserStats = async (req: Request, res: Response) => {
       Math.round(globalStreak * 5 + totalCompleted * 2)
     ); // Gamified score
 
+    // Calculate daily usage for rate limiting display
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Dynamic import to avoid circular dependency issues if they exist,
+    // or just import at top if clean. Let's use the model directly.
+    const Submission = require("../models/Submission").default;
+
+    const dailyVerifications = await Submission.countDocuments({
+      user: req.user!.id,
+      createdAt: {
+        $gte: today,
+        $lt: tomorrow,
+      },
+    });
+
+    // cast to any for plan property
+    const userPlan = (req.user as any).plan || "free";
+    const dailyLimit = userPlan === "free" ? 3 : Infinity;
+
     res.status(200).json({
       totalHabits,
       totalCompleted,
       globalStreak, // Effectively "Total Cumulative Streak" across all habits
       disciplineScore: score,
+      usage: {
+        plan: userPlan,
+        verifiedCount: dailyVerifications,
+        limit: dailyLimit,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message });

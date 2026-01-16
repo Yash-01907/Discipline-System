@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  TextInput,
 } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -16,6 +18,8 @@ import { useVerifySubmission } from "../hooks/useHabits";
 import { COLORS, SPACING } from "../constants/theme";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { usePendingSubmissions } from "../stores/pendingSubmissions";
+import { appealSubmission } from "../api/habits";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Verify">;
 
@@ -27,6 +31,50 @@ const VerifyScreen = ({ route, navigation }: Props) => {
   const cameraRef = useRef<CameraView>(null);
 
   const verifyMutation = useVerifySubmission();
+  const { addSubmission } = usePendingSubmissions();
+
+  const [appealModalVisible, setAppealModalVisible] = useState(false);
+  const [appealReason, setAppealReason] = useState("");
+  const [currentSubmissionId, setCurrentSubmissionId] = useState<string | null>(
+    null
+  );
+  const [currentFeedback, setCurrentFeedback] = useState("");
+
+  const initiateAppeal = (submissionId: string, feedback: string) => {
+    setCurrentSubmissionId(submissionId);
+    setCurrentFeedback(feedback);
+    setAppealReason("");
+    setAppealModalVisible(true);
+  };
+
+  const submitAppeal = async () => {
+    if (!currentSubmissionId) return;
+
+    try {
+      const result = await appealSubmission(currentSubmissionId, appealReason);
+      setAppealModalVisible(false);
+
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          "Appeal Submitted ✓",
+          "Thanks for your feedback! We'll review this to improve our AI.",
+          [{ text: "OK", onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert("Appeal Failed", result.message, [
+          { text: "OK", onPress: () => navigation.goBack() },
+        ]);
+      }
+    } catch (error: any) {
+      setAppealModalVisible(false);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message || "Failed to submit appeal",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    }
+  };
 
   if (!permission) {
     // Camera permissions are still loading
@@ -82,23 +130,64 @@ const VerifyScreen = ({ route, navigation }: Props) => {
         onSuccess: (data: any) => {
           if (data.success) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("VERIFIED", `Judge's Verdict: ${data.feedback}`, [
+            Alert.alert("VERIFIED ✓", `Judge's Verdict: ${data.feedback}`, [
               { text: "OK", onPress: () => navigation.goBack() },
             ]);
           } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert("REJECTED", `Judge's Verdict: ${data.feedback}`);
+            // Show rejection with Appeal option
+            Alert.alert("REJECTED ✗", `Judge's Verdict: ${data.feedback}`, [
+              {
+                text: "Accept",
+                style: "cancel",
+                onPress: () => {},
+              },
+              {
+                text: "🚩 Appeal",
+                style: "destructive",
+                onPress: () => {
+                  if (data.submissionId) {
+                    initiateAppeal(data.submissionId, data.feedback);
+                  } else {
+                    Alert.alert(
+                      "Cannot Appeal",
+                      "Submission ID not available. Please try again."
+                    );
+                  }
+                },
+              },
+            ]);
           }
         },
         onError: (error: any) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          // Check for specific backend feedback or default to detailed error
-          const errorMessage =
-            error.response?.data?.feedback ||
-            error.response?.data?.message ||
-            `Submission failed (${error.response?.status || "Network Error"})`;
 
-          Alert.alert("Submission Failed", errorMessage);
+          // Check if it's a network error (no response = network issue)
+          const isNetworkError =
+            !error.response ||
+            error.code === "NETWORK_ERROR" ||
+            error.code === "ERR_NETWORK";
+
+          if (isNetworkError) {
+            // Queue for later sync
+            addSubmission(habitId, habitTitle, capturedImage);
+
+            Alert.alert(
+              "Saved for Later",
+              "You appear to be offline. Your submission has been saved and will be uploaded automatically when you're back online.",
+              [{ text: "OK", onPress: () => navigation.goBack() }]
+            );
+          } else {
+            // Server error - show the error message
+            const errorMessage =
+              error.response?.data?.feedback ||
+              error.response?.data?.message ||
+              `Submission failed (${
+                error.response?.status || "Unknown Error"
+              })`;
+
+            Alert.alert("Submission Failed", errorMessage);
+          }
         },
       }
     );
@@ -185,6 +274,52 @@ const VerifyScreen = ({ route, navigation }: Props) => {
           </>
         )}
       </View>
+
+      {/* Appeal Modal */}
+      <Modal
+        visible={appealModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAppealModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Appeal Decision 🚩</Text>
+            <Text style={styles.modalSubtitle}>
+              The AI said: "{currentFeedback}"
+            </Text>
+            <Text style={styles.modalLabel}>Why is this incorrect?</Text>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="E.g., I did the task but the lighting was bad..."
+                placeholderTextColor={COLORS.textSecondary}
+                value={appealReason}
+                onChangeText={setAppealReason}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setAppealModalVisible(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+                onPress={submitAppeal}
+              >
+                <Text style={styles.modalButtonTextSubmit}>Submit Appeal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -299,6 +434,80 @@ const styles = StyleSheet.create({
     marginTop: SPACING.s,
     fontWeight: "bold",
     letterSpacing: 1.5,
+  },
+  // Appeal Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.m,
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.l,
+    borderRadius: 20,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.text,
+    marginBottom: SPACING.s,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.error,
+    marginBottom: SPACING.m,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.s,
+  },
+  inputContainer: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.s,
+    marginBottom: SPACING.l,
+  },
+  modalInput: {
+    minHeight: 80,
+    fontSize: 16,
+    color: COLORS.text,
+    textAlignVertical: "top",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: SPACING.m,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: COLORS.background,
+  },
+  modalButtonSubmit: {
+    backgroundColor: COLORS.primary,
+  },
+  modalButtonTextCancel: {
+    color: COLORS.text,
+    fontWeight: "bold",
+  },
+  modalButtonTextSubmit: {
+    color: "#FFF",
+    fontWeight: "bold",
   },
 });
 

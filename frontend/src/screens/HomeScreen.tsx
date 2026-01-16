@@ -11,10 +11,11 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types/navigation";
-import { useHabits } from "../hooks/useHabits";
+import { useHabits, useUserStats } from "../hooks/useHabits";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HabitListSkeleton } from "../components/Skeleton";
+import PendingSubmissionsBanner from "../components/PendingSubmissionsBanner";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -25,6 +26,7 @@ const HomeScreen = () => {
   // In tab nav, navigation might need type adjustment if jumping stacks, but usually fine.
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { data: habits, isLoading, refetch, isRefetching } = useHabits();
+  const { data: userStats, refetch: refetchStats } = useUserStats();
 
   const today = new Date();
   const dateOptions: Intl.DateTimeFormatOptions = {
@@ -55,6 +57,40 @@ const HomeScreen = () => {
     <View style={styles.headerContainer}>
       <Text style={styles.greeting}>Good Morning,</Text>
       <Text style={styles.date}>{dateStr}</Text>
+
+      {userStats?.usage && userStats.usage.plan === "free" && (
+        <View style={styles.usageContainer}>
+          <View style={styles.usageRow}>
+            <Text style={styles.usageText}>
+              Daily Free Verifications:{" "}
+              <Text style={styles.usageCount}>
+                {userStats.usage.verifiedCount}/{userStats.usage.limit}
+              </Text>
+            </Text>
+            {userStats.usage.verifiedCount >= userStats.usage.limit && (
+              <Text style={styles.limitReached}>Limit Reached</Text>
+            )}
+          </View>
+          <View style={styles.progressBg}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(
+                    (userStats.usage.verifiedCount / userStats.usage.limit) *
+                      100,
+                    100
+                  )}%`,
+                  backgroundColor:
+                    userStats.usage.verifiedCount >= userStats.usage.limit
+                      ? COLORS.error
+                      : COLORS.primary,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      )}
     </View>
   );
 
@@ -101,15 +137,23 @@ const HomeScreen = () => {
     );
   }
 
+  const handleRefresh = async () => {
+    // We can run these concurrently
+    await Promise.all([refetch(), refetchStats()]);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {renderHeader()}
+
+      {/* Pending Submissions Banner */}
+      <PendingSubmissionsBanner />
 
       <ScrollView
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={handleRefresh}
             tintColor={COLORS.primary}
           />
         }
@@ -284,6 +328,43 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: "#FFF",
     marginTop: -4, // Optical center
+  },
+  usageContainer: {
+    marginTop: SPACING.m,
+    padding: SPACING.m,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  usageRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: SPACING.s,
+  },
+  usageText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  usageCount: {
+    color: COLORS.text,
+    fontWeight: "bold",
+  },
+  limitReached: {
+    color: COLORS.error,
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  progressBg: {
+    height: 6,
+    backgroundColor: COLORS.background,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
   },
 });
 
