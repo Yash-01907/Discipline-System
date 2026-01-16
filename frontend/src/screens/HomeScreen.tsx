@@ -146,14 +146,83 @@ const HomeScreen = () => {
     await Promise.all([refetch(), refetchStats()]);
   };
 
+  // Prepare sections for FlatList
+  const sections = useMemo(() => {
+    const result = [];
+
+    // Today's Goals section
+    result.push({
+      title: "TODAY'S GOALS",
+      data: dailyHabits.length > 0 ? dailyHabits : [],
+      emptyMessage: "No goals set for today.",
+    });
+
+    // Upcoming Goals section
+    result.push({
+      title: "UPCOMING GOALS",
+      data: upcomingHabits.length > 0 ? upcomingHabits : [],
+      emptyMessage: "No upcoming one-time goals.",
+    });
+
+    return result;
+  }, [dailyHabits, upcomingHabits]);
+
+  // Flatten sections into a single array for FlatList
+  const flattenedData = useMemo(() => {
+    const items: any[] = [];
+    sections.forEach((section) => {
+      items.push({ type: "header", title: section.title });
+      if (section.data.length === 0) {
+        items.push({ type: "empty", message: section.emptyMessage });
+      } else {
+        section.data.forEach((habit) => {
+          items.push({ type: "habit", data: habit });
+        });
+      }
+    });
+    return items;
+  }, [sections]);
+
+  const renderFlatListItem = ({ item }: { item: any }) => {
+    if (item.type === "header") {
+      return <Text style={styles.sectionTitle}>{item.title}</Text>;
+    }
+
+    if (item.type === "empty") {
+      return <Text style={styles.emptyText}>{item.message}</Text>;
+    }
+
+    if (item.type === "habit") {
+      return (
+        <View style={{ marginBottom: SPACING.m }}>
+          {renderHabitItem({ item: item.data })}
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const getItemKey = (item: any, index: number) => {
+    if (item.type === "header") return `header-${item.title}`;
+    if (item.type === "empty") return `empty-${index}`;
+    if (item.type === "habit") return item.data._id;
+    return `item-${index}`;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      {renderHeader()}
-
-      {/* Pending Submissions Banner */}
-      <PendingSubmissionsBanner />
-
-      <ScrollView
+      <FlatList
+        data={flattenedData}
+        renderItem={renderFlatListItem}
+        keyExtractor={getItemKey}
+        ListHeaderComponent={
+          <>
+            {renderHeader()}
+            <PendingSubmissionsBanner />
+          </>
+        }
+        ListFooterComponent={<View style={{ height: 80 }} />}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -162,38 +231,12 @@ const HomeScreen = () => {
           />
         }
         contentContainerStyle={styles.scrollContent}
-      >
-        {/* Today's Goals */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>TODAY'S GOALS</Text>
-          {dailyHabits.length === 0 ? (
-            <Text style={styles.emptyText}>No goals set for today.</Text>
-          ) : (
-            dailyHabits.map((habit) => (
-              <View key={habit._id} style={{ marginBottom: SPACING.m }}>
-                {renderHabitItem({ item: habit })}
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Upcoming Goals */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>UPCOMING GOALS</Text>
-          {upcomingHabits.length === 0 ? (
-            <Text style={styles.emptyText}>No upcoming one-time goals.</Text>
-          ) : (
-            upcomingHabits.map((habit) => (
-              <View key={habit._id} style={{ marginBottom: SPACING.m }}>
-                {renderHabitItem({ item: habit })}
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Spacer for FAB or TabBar */}
-        <View style={{ height: 80 }} />
-      </ScrollView>
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={21}
+      />
 
       {/* Floating Action Button for Adding */}
       <TouchableOpacity
@@ -205,9 +248,6 @@ const HomeScreen = () => {
     </SafeAreaView>
   );
 };
-
-// Need ScrollView import modification
-import { ScrollView } from "react-native";
 
 const styles = StyleSheet.create({
   container: {

@@ -12,6 +12,7 @@ import adminRoutes from "./routes/adminRoutes";
 import path from "path";
 import fs from "fs";
 import { errorHandler } from "./middleware/errorMiddleware";
+import { generalLimiter } from "./middleware/rateLimiters";
 
 dotenv.config();
 
@@ -21,6 +22,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Global rate limiting
+app.use(generalLimiter);
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, "../uploads");

@@ -21,8 +21,21 @@ export interface Comment {
   createdAt: string;
 }
 
-export const fetchCommunityFeed = async (): Promise<FeedItem[]> => {
-  const { data } = await client.get("/community/feed");
+export interface FeedResponse {
+  data: FeedItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export const fetchCommunityFeed = async (
+  cursor?: string,
+  limit: number = 20
+): Promise<FeedResponse> => {
+  const params = new URLSearchParams();
+  if (cursor) params.append("cursor", cursor);
+  params.append("limit", limit.toString());
+
+  const { data } = await client.get(`/community/feed?${params.toString()}`);
   return data;
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,10 +14,15 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import {
   FeedItem,
+  FeedResponse,
   Comment,
   fetchCommunityFeed,
   toggleLike,
@@ -46,13 +51,24 @@ const CommunityScreen = () => {
   const [loadingComments, setLoadingComments] = useState(false);
 
   const {
-    data: feed,
+    data,
     isLoading,
     error,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["communityFeed"],
-    queryFn: fetchCommunityFeed,
+    queryFn: ({ pageParam }) => fetchCommunityFeed(pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
   });
+
+  // Flatten all pages into a single feed array
+  const feed = useMemo(() => {
+    if (!data) return [];
+    return data.pages.flatMap((page) => page.data);
+  }, [data]);
 
   // Like mutation with optimistic update
   const likeMutation = useMutation({
@@ -62,32 +78,36 @@ const CommunityScreen = () => {
       await queryClient.cancelQueries({ queryKey: ["communityFeed"] });
 
       // Snapshot current data
-      const previousFeed = queryClient.getQueryData<FeedItem[]>([
-        "communityFeed",
-      ]);
+      const previousData = queryClient.getQueryData(["communityFeed"]);
 
-      // Optimistically update
-      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) => {
+      // Optimistically update across all pages
+      queryClient.setQueryData(["communityFeed"], (old: any) => {
         if (!old) return old;
-        return old.map((item) => {
-          if (item._id === submissionId) {
-            const newIsLiked = !item.isLiked;
-            return {
-              ...item,
-              isLiked: newIsLiked,
-              likeCount: item.likeCount + (newIsLiked ? 1 : -1),
-            };
-          }
-          return item;
-        });
+        return {
+          ...old,
+          pages: old.pages.map((page: FeedResponse) => ({
+            ...page,
+            data: page.data.map((item: FeedItem) => {
+              if (item._id === submissionId) {
+                const newIsLiked = !item.isLiked;
+                return {
+                  ...item,
+                  isLiked: newIsLiked,
+                  likeCount: item.likeCount + (newIsLiked ? 1 : -1),
+                };
+              }
+              return item;
+            }),
+          })),
+        };
       });
 
-      return { previousFeed };
+      return { previousData };
     },
     onError: (err, submissionId, context) => {
       // Rollback on error
-      if (context?.previousFeed) {
-        queryClient.setQueryData(["communityFeed"], context.previousFeed);
+      if (context?.previousData) {
+        queryClient.setQueryData(["communityFeed"], context.previousData);
       }
     },
     onSettled: () => {
@@ -110,15 +130,21 @@ const CommunityScreen = () => {
       setComments((prev) => [data.comment, ...prev]);
       setCommentText("");
 
-      // Update comment count in feed
-      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) => {
+      // Update comment count in feed across all pages
+      queryClient.setQueryData(["communityFeed"], (old: any) => {
         if (!old) return old;
-        return old.map((item) => {
-          if (item._id === selectedSubmission?._id) {
-            return { ...item, commentCount: data.commentCount };
-          }
-          return item;
-        });
+        return {
+          ...old,
+          pages: old.pages.map((page: FeedResponse) => ({
+            ...page,
+            data: page.data.map((item: FeedItem) => {
+              if (item._id === selectedSubmission?._id) {
+                return { ...item, commentCount: data.commentCount };
+              }
+              return item;
+            }),
+          })),
+        };
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -175,9 +201,18 @@ const CommunityScreen = () => {
   const reportMutation = useMutation({
     mutationFn: reportSubmission,
     onSuccess: (_, submissionId) => {
-      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) =>
-        old ? old.filter((item) => item._id !== submissionId) : []
-      );
+      queryClient.setQueryData(["communityFeed"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: FeedResponse) => ({
+            ...page,
+            data: page.data.filter(
+              (item: FeedItem) => item._id !== submissionId
+            ),
+          })),
+        };
+      });
       Alert.alert("Reported", "Content has been reported and hidden.");
     },
     onError: (err: any) => {
@@ -189,9 +224,16 @@ const CommunityScreen = () => {
   const blockMutation = useMutation({
     mutationFn: blockUser,
     onSuccess: (_, userId) => {
-      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) =>
-        old ? old.filter((item) => item.userId !== userId) : []
-      );
+      queryClient.setQueryData(["communityFeed"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: FeedResponse) => ({
+            ...page,
+            data: page.data.filter((item: FeedItem) => item.userId !== userId),
+          })),
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ["communityFeed"] });
       Alert.alert("User Blocked", "User has been blocked.");
     },
@@ -343,6 +385,21 @@ const CommunityScreen = () => {
     []
   );
 
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const renderFooter = useCallback(() => {
+    if (!isFetchingNextPage) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      </View>
+    );
+  }, [isFetchingNextPage]);
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>Community Feed 🌍</Text>
@@ -353,7 +410,14 @@ const CommunityScreen = () => {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
         />
+      ) : isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
       ) : (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>🏜️</Text>
@@ -706,6 +770,10 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontWeight: "bold",
     fontSize: 14,
+  },
+  footerLoader: {
+    paddingVertical: SPACING.m,
+    alignItems: "center",
   },
 });
 

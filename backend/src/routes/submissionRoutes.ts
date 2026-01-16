@@ -5,6 +5,7 @@ import {
   getAppealedSubmissions,
 } from "../controllers/submissionController";
 import { protect } from "../middleware/authMiddleware";
+import { submissionLimiter } from "../middleware/rateLimiters";
 
 const router = express.Router();
 
@@ -12,7 +13,12 @@ const router = express.Router();
 router.get("/appeals/list", protect, getAppealedSubmissions);
 
 // Appeal a rejected submission
-router.post("/:submissionId/appeal", protect, appealSubmission);
+router.post(
+  "/:submissionId/appeal",
+  submissionLimiter,
+  protect,
+  appealSubmission
+);
 
 // Get submissions for a habit
 router.get("/:habitId", protect, getHabitSubmissions);

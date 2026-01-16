@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 import { env } from "../config/env";
 
 // @desc    Get public community feed
-// @route   GET /api/community/feed
+// @route   GET /api/community/feed?cursor=<timestamp>&limit=<number>
 // @access  Public (anyone can view the feed)
 export const getCommunityFeed = async (req: Request, res: Response) => {
   try {
@@ -38,17 +38,30 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       blockedUsers = currentUser.blockedUsers;
     }
 
+    // Pagination parameters
+    const limit = parseInt(req.query.limit as string) || 20;
+    const cursor = req.query.cursor as string; // ISO timestamp or submission ID
+
+    // Build initial match conditions
+    const matchConditions: any = {
+      aiVerificationResult: true,
+      user: {
+        $ne: null,
+        $nin: blockedUsers.map((id) => new mongoose.Types.ObjectId(id)),
+      },
+      isFlagged: false,
+    };
+
+    // Add cursor-based filtering (for pagination)
+    if (cursor) {
+      // Cursor is a timestamp - get posts older than this
+      matchConditions.createdAt = { $lt: new Date(cursor) };
+    }
+
     // 1. Aggregation Pipeline
     const pipeline: any[] = [
       {
-        $match: {
-          aiVerificationResult: true,
-          user: {
-            $ne: null,
-            $nin: blockedUsers.map((id) => new mongoose.Types.ObjectId(id)),
-          },
-          isFlagged: false,
-        },
+        $match: matchConditions,
       },
       // Lookup Habit to check visibility
       {
@@ -69,7 +82,7 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
         },
       },
       { $sort: { createdAt: -1 } },
-      { $limit: 50 },
+      { $limit: limit + 1 }, // Fetch one extra to determine if there are more results
       // Lookup User Details
       {
         $lookup: {
@@ -85,24 +98,39 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
           preserveNullAndEmptyArrays: false, // Filter out if user doesn't exist
         },
       },
-      // Lookup Likes ONLY for isLiked check (not for counting)
+      // OPTIMIZED: Only lookup to check if *current user* liked it
+      // We do NOT fetch all likes, just check for the current user's like
       {
         $lookup: {
           from: "likes",
-          localField: "_id",
-          foreignField: "submission",
-          as: "likes",
+          let: { submissionId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$submission", "$$submissionId"] },
+                    {
+                      $eq: [
+                        "$user",
+                        currentUserId
+                          ? new mongoose.Types.ObjectId(currentUserId)
+                          : null,
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 }, // Only need to know if one exists
+          ],
+          as: "myLike",
         },
       },
-      // Add isLiked (use denormalized likeCount/commentCount from document)
+      // Add isLiked based on whether myLike array has any items
       {
         $addFields: {
-          isLiked: {
-            $in: [
-              currentUserId ? new mongoose.Types.ObjectId(currentUserId) : null,
-              "$likes.user",
-            ],
-          },
+          isLiked: { $gt: [{ $size: "$myLike" }, 0] },
         },
       },
       // Project final shape
@@ -124,7 +152,18 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       },
     ];
 
-    const feed = await Submission.aggregate(pipeline);
+    const results = await Submission.aggregate(pipeline);
+
+    // Check if there are more results
+    const hasMore = results.length > limit;
+    const feed = hasMore ? results.slice(0, limit) : results;
+
+    // Determine next cursor (timestamp of last item)
+    let nextCursor: string | null = null;
+    if (hasMore && feed.length > 0) {
+      const lastItem = feed[feed.length - 1];
+      nextCursor = lastItem.createdAt.toISOString();
+    }
 
     // Map _id to string if needed by frontend (Agg gives ObjectIds, res.json usually handles it but good to be safe)
     // Also rename createdAt to timestamp to match frontend expectation
@@ -133,7 +172,11 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       timestamp: item.createdAt,
     }));
 
-    res.json(formattedFeed);
+    res.json({
+      data: formattedFeed,
+      nextCursor,
+      hasMore,
+    });
   } catch (error: any) {
     console.error("Community Feed Error:", error);
     res.status(500).json({ message: error.message });
@@ -144,13 +187,19 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
 // @route   POST /api/community/:submissionId/like
 // @access  Private
 export const toggleLike = async (req: Request, res: Response) => {
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { submissionId } = req.params;
     const userId = req.user!._id;
 
     // Check if submission exists
-    const submission = await Submission.findById(submissionId);
+    const submission = await Submission.findById(submissionId).session(session);
     if (!submission) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Submission not found" });
     }
 
@@ -158,35 +207,44 @@ export const toggleLike = async (req: Request, res: Response) => {
     const existingLike = await Like.findOne({
       user: userId,
       submission: submissionId as any,
-    });
+    }).session(session);
 
     let isLiked: boolean;
     let likeCount: number;
 
     if (existingLike) {
-      // Unlike - remove the like and decrement count
-      await Like.deleteOne({ _id: existingLike._id });
+      // Unlike - remove the like and decrement count atomically
+      await Like.deleteOne({ _id: existingLike._id }).session(session);
       const updated = await Submission.findByIdAndUpdate(
         submissionId,
         { $inc: { likeCount: -1 } },
-        { new: true }
+        { new: true, session }
       );
       isLiked = false;
       likeCount = Math.max(0, updated?.likeCount || 0);
     } else {
-      // Like - add new like and increment count
-      await Like.create({
-        user: userId,
-        submission: submissionId as any,
-      });
+      // Like - add new like and increment count atomically
+      await Like.create(
+        [
+          {
+            user: userId,
+            submission: submissionId as any,
+          },
+        ],
+        { session }
+      );
       const updated = await Submission.findByIdAndUpdate(
         submissionId,
         { $inc: { likeCount: 1 } },
-        { new: true }
+        { new: true, session }
       );
       isLiked = true;
       likeCount = updated?.likeCount || 1;
     }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({
       success: true,
@@ -194,6 +252,9 @@ export const toggleLike = async (req: Request, res: Response) => {
       likeCount,
     });
   } catch (error: any) {
+    // Rollback on error
+    await session.abortTransaction();
+    session.endSession();
     console.error("Toggle Like Error:", error);
     res.status(500).json({ message: error.message });
   }
@@ -203,6 +264,10 @@ export const toggleLike = async (req: Request, res: Response) => {
 // @route   POST /api/community/:submissionId/comment
 // @access  Private
 export const addComment = async (req: Request, res: Response) => {
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { submissionId } = req.params;
     const { text } = req.body;
@@ -210,49 +275,69 @@ export const addComment = async (req: Request, res: Response) => {
 
     // Validate text
     if (!text || text.trim().length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: "Comment text is required" });
     }
 
     if (text.length > 500) {
+      await session.abortTransaction();
+      session.endSession();
       return res
         .status(400)
         .json({ message: "Comment must be 500 characters or less" });
     }
 
     // Check if submission exists
-    const submission = await Submission.findById(submissionId);
+    const submission = await Submission.findById(submissionId).session(session);
     if (!submission) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: "Submission not found" });
     }
 
-    // Create comment and increment denormalized count
-    const comment = await Comment.create({
-      user: userId,
-      submission: submissionId as any,
-      text: text.trim(),
-    });
+    // Create comment and increment denormalized count atomically
+    const [comment] = await Comment.create(
+      [
+        {
+          user: userId,
+          submission: submissionId as any,
+          text: text.trim(),
+        },
+      ],
+      { session }
+    );
 
     // Populate user info for response
-    const populatedComment = await (comment as any).populate("user", "name");
+    const populatedComment = await Comment.findById(comment._id)
+      .populate("user", "name")
+      .session(session);
 
     // Increment denormalized comment count
     const updated = await Submission.findByIdAndUpdate(
       submissionId,
       { $inc: { commentCount: 1 } },
-      { new: true }
+      { new: true, session }
     );
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       success: true,
       comment: {
-        _id: populatedComment._id,
-        text: populatedComment.text,
-        userName: (populatedComment.user as any)?.name || "Anonymous",
-        createdAt: populatedComment.createdAt,
+        _id: populatedComment!._id,
+        text: populatedComment!.text,
+        userName: (populatedComment!.user as any)?.name || "Anonymous",
+        createdAt: populatedComment!.createdAt,
       },
       commentCount: updated?.commentCount || 1,
     });
   } catch (error: any) {
+    // Rollback on error
+    await session.abortTransaction();
+    session.endSession();
     console.error("Add Comment Error:", error);
     res.status(500).json({ message: error.message });
   }

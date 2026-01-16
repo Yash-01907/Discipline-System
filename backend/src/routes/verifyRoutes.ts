@@ -3,6 +3,7 @@ import multer from "multer";
 import { verifySubmission } from "../controllers/verifyController";
 import { protect } from "../middleware/authMiddleware";
 import { checkVerificationLimit } from "../middleware/limitMiddleware";
+import { verifyLimiter } from "../middleware/rateLimiters";
 import path from "path";
 
 const router = express.Router();
@@ -35,6 +36,7 @@ const upload = multer({
 
 router.post(
   "/",
+  verifyLimiter,
   protect,
   checkVerificationLimit,
   upload.single("image"),
