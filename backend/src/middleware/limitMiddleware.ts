@@ -22,6 +22,7 @@ export const checkVerificationLimit = async (
 
     const dailyCount = await Submission.countDocuments({
       user: user._id,
+      aiVerificationResult: true,
       createdAt: {
         $gte: today,
         $lt: tomorrow,

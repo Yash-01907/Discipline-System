@@ -19,6 +19,7 @@ import { useCreateHabit } from "../hooks/useHabits";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { scheduleHabitReminder } from "../utils/notifications";
+import { formatTime, formatTimeFor24Hour } from "../utils/dateUtils";
 
 type CreateHabitScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -38,18 +39,6 @@ const CreateHabitScreen = () => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedHour, setSelectedHour] = useState(9);
   const [selectedMinute, setSelectedMinute] = useState(0);
-
-  const formatTime = (hour: number, minute: number): string => {
-    const period = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
-  };
-
-  const formatTimeFor24Hour = (hour: number, minute: number): string => {
-    return `${hour.toString().padStart(2, "0")}:${minute
-      .toString()
-      .padStart(2, "0")}`;
-  };
 
   const handleTimeConfirm = () => {
     const time = formatTimeFor24Hour(selectedHour, selectedMinute);

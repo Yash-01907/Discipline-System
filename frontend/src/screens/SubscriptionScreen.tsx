@@ -17,8 +17,9 @@ import { useNavigation } from "@react-navigation/native";
 
 // Placeholder API Keys - You would replace these with your actual RevenueCat keys
 const API_KEYS = {
-  apple: "appl_your_revenuecat_api_key",
-  google: "goog_your_revenuecat_api_key",
+  apple: process.env.EXPO_PUBLIC_RC_APPLE_KEY || "appl_your_revenuecat_api_key",
+  google:
+    process.env.EXPO_PUBLIC_RC_GOOGLE_KEY || "goog_your_revenuecat_api_key",
 };
 
 const SubscriptionScreen = () => {

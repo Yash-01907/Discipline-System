@@ -6,11 +6,10 @@ import User from "../models/User";
 // @access  Public (Protected by Header Secret in production)
 export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
   try {
-    const { event } = req.body;
     const authHeader = req.headers.authorization;
     const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
 
-    // Verify Secret if configured (Critical for Production)
+    // 1. Verify Secret FIRST (Critical for Production)
     if (webhookSecret) {
       // RevenueCat/Stripe often send just the key or "Bearer <key>"
       if (
@@ -24,6 +23,8 @@ export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
     } else {
       console.warn("REVENUECAT_WEBHOOK_SECRET not set. Webhook is vulnerable.");
     }
+
+    const { event } = req.body;
 
     if (!event) {
       return res.status(400).json({ message: "Invalid payload" });

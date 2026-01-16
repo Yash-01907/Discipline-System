@@ -13,6 +13,7 @@ export interface IHabit extends Document {
   createdAt: Date;
   strictness: "low" | "medium" | "high";
   isPublic: boolean;
+  lastStreakCheck?: Date;
 }
 
 const HabitSchema: Schema = new Schema(
@@ -63,6 +64,9 @@ const HabitSchema: Schema = new Schema(
     isPublic: {
       type: Boolean,
       default: false, // Private by default for user safety
+    },
+    lastStreakCheck: {
+      type: Date,
     },
   },
   {

@@ -121,6 +121,7 @@ export const getUserStats = async (req: Request, res: Response) => {
 
     const dailyVerifications = await Submission.countDocuments({
       user: req.user!._id,
+      aiVerificationResult: true,
       createdAt: {
         $gte: today,
         $lt: tomorrow,
@@ -155,6 +156,15 @@ export const deleteUser = async (req: Request, res: Response) => {
     const userId = req.user!._id;
 
     // Delete related data first
+
+    // 0. Find User's Submissions to cascade delete interactions on them
+    const userSubmissions = await Submission.find({ user: userId });
+    const submissionIds = userSubmissions.map((s) => s._id);
+
+    // Delete Likes & Comments ON these submissions (made by others)
+    await Like.deleteMany({ submission: { $in: submissionIds } });
+    await Comment.deleteMany({ submission: { $in: submissionIds } });
+
     // 1. Delete Submissions
     await Submission.deleteMany({ user: userId });
 

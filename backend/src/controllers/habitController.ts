@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import { toZonedTime } from "date-fns-tz";
+import { differenceInCalendarDays } from "date-fns";
 import Habit from "../models/Habit";
 import "../types/express"; // Extend Express Request with user
 
@@ -11,15 +13,19 @@ export const getHabits = async (req: Request, res: Response) => {
       createdAt: -1,
     });
 
-    // Streak Reset Logic
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
+    const userTimezone = (req.headers["x-timezone"] as string) || "UTC";
+    const now = new Date(); // Server time (UTC)
+    const userNow = toZonedTime(now, userTimezone);
 
     for (const habit of habits) {
+      // 1. Lazy Streak Update: Check if already processed today (in User's Timezone)
+      if (habit.lastStreakCheck) {
+        const userLastCheck = toZonedTime(habit.lastStreakCheck, userTimezone);
+        if (differenceInCalendarDays(userNow, userLastCheck) === 0) {
+          continue; // Already checked today for this user
+        }
+      }
+
       // Skip if no streak to reset or one-time goals
       if (habit.currentStreak === 0 || habit.type === "one-time") {
         continue;
@@ -31,40 +37,41 @@ export const getHabits = async (req: Request, res: Response) => {
         continue;
       }
 
-      const lastCompletedDate = new Date(
-        completedDates[completedDates.length - 1]
-      );
-      const lastCompletedDay = new Date(
-        lastCompletedDate.getFullYear(),
-        lastCompletedDate.getMonth(),
-        lastCompletedDate.getDate()
+      const lastCompletedDate = completedDates[completedDates.length - 1];
+      const userLastCompletedDate = toZonedTime(
+        lastCompletedDate,
+        userTimezone
       );
 
-      // Calculate days since last completion
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const daysSinceLastCompletion = Math.floor(
-        (startOfToday.getTime() - lastCompletedDay.getTime()) / msPerDay
+      // Calculate calendar days difference in User's Timezone
+      const daysSinceLastCompletion = differenceInCalendarDays(
+        userNow,
+        userLastCompletedDate
       );
 
       let shouldReset = false;
 
       if (habit.frequency === "Daily") {
-        // Daily habits: Reset if more than 1 day has passed (missed yesterday)
+        // Daily habits: Reset if > 1 day has passed (missed yesterday)
         if (daysSinceLastCompletion > 1) {
           shouldReset = true;
         }
       } else if (habit.frequency === "Weekly") {
-        // Weekly habits: Reset if more than 7 days have passed
+        // Weekly habits: Reset if > 7 days have passed
         if (daysSinceLastCompletion > 7) {
           shouldReset = true;
         }
       }
 
+      // Update the check date so we don't run this again today
+      habit.lastStreakCheck = now;
+
       if (shouldReset) {
         habit.currentStreak = 0;
-        await habit.save();
         console.log(`Streak reset for habit: ${habit.title}`);
       }
+
+      await habit.save();
     }
 
     res.json(habits);

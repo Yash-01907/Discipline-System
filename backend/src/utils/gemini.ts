@@ -87,10 +87,11 @@ export const verifyImageWithGemini = async (
       Return a JSON response ONLY: { "verified": boolean, "reason": "Short, witty feedback string (max 15 words)" }.
       `;
 
+    const fileBuffer = await fs.promises.readFile(imagePath);
     const imageParts = [
       {
         inlineData: {
-          data: Buffer.from(fs.readFileSync(imagePath)).toString("base64"),
+          data: fileBuffer.toString("base64"),
           mimeType: mimeType,
         },
       },

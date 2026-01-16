@@ -32,24 +32,25 @@ export const verifySubmission = async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: "verihabit",
-    });
-    const imageUrl = result.secure_url;
-
-    // 3. Gemini Verification
-    // We use the local file path for Gemini analysis as it's efficient
-    // We pass the full habit object (as any to satisfy IHabitContext duck typing)
+    // 2. Gemini Verification First (Local File)
     const verification = await verifyImageWithGemini(
       req.file.path,
       {
         title: habit.title,
         description: habit.description,
-        strictness: habit.strictness as "low" | "medium" | "high", // Cast string to union type
+        strictness: habit.strictness as "low" | "medium" | "high",
       },
       req.file.mimetype
     );
+
+    // 3. Upload to Cloudinary (Categorized)
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: verification.verified
+        ? "verihabit/verified"
+        : "verihabit/rejected",
+      tags: verification.verified ? [] : ["rejected", "auto_delete"],
+    });
+    const imageUrl = result.secure_url;
 
     // 4. Handle Outcome
     if (verification.verified) {
