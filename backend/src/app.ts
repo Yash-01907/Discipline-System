@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import habitRoutes from "./routes/habitRoutes";
 import verifyRoutes from "./routes/verifyRoutes";
+import submissionRoutes from "./routes/submissionRoutes";
 import path from "path";
 import fs from "fs";
 
@@ -25,6 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
 // Routes
 app.use("/api/habits", habitRoutes);
 app.use("/api/verify", verifyRoutes);
+app.use("/api/submissions", submissionRoutes);
 
 // Health Check
 app.get("/", (req, res) => {

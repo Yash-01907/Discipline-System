@@ -13,12 +13,16 @@ import { useHabits } from "../hooks/useHabits";
 import { Calendar } from "react-native-calendars";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSubmissions } from "../hooks/useSubmissions";
+import HabitInsights from "../components/HabitInsights";
 
 type Props = NativeStackScreenProps<RootStackParamList, "HabitDetails">;
 
 const HabitDetailsScreen = ({ route, navigation }: Props) => {
   const { habitId, habitTitle } = route.params;
   const { data: habits, isLoading } = useHabits();
+  const { data: submissions, isLoading: isSubmissionsLoading } =
+    useSubmissions(habitId);
 
   const habit = useMemo(
     () => habits?.find((h) => h._id === habitId),
@@ -84,30 +88,14 @@ const HabitDetailsScreen = ({ route, navigation }: Props) => {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>HISTORY LOG</Text>
-        <View style={styles.calendarContainer}>
-          <Calendar
-            markedDates={markedDates}
-            theme={{
-              backgroundColor: COLORS.surface,
-              calendarBackground: COLORS.surface,
-              textSectionTitleColor: COLORS.textSecondary,
-              selectedDayBackgroundColor: COLORS.success,
-              selectedDayTextColor: "#ffffff",
-              todayTextColor: COLORS.primary,
-              dayTextColor: COLORS.text,
-              textDisabledColor: "#d9e1e8",
-              arrowColor: COLORS.primary,
-              monthTextColor: COLORS.text,
-              indicatorColor: COLORS.primary,
-              textDayFontFamily: FONTS.regular,
-              textMonthFontFamily: FONTS.bold,
-              textDayHeaderFontFamily: FONTS.regular,
-              textDayFontSize: 16,
-              textMonthFontSize: 16,
-            }}
-          />
-        </View>
+        <Text style={styles.sectionTitle}>INSIGHTS & ANALYSIS</Text>
+        {isSubmissionsLoading ? (
+          <ActivityIndicator color={COLORS.primary} />
+        ) : submissions ? (
+          <HabitInsights submissions={submissions} />
+        ) : (
+          <Text>No data</Text>
+        )}
 
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>Description</Text>

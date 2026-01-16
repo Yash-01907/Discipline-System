@@ -8,9 +8,11 @@ export const getHabitSubmissions = async (req: Request, res: Response) => {
   try {
     const { habitId } = req.params;
 
-    const submissions = await Submission.find({ habitId }).sort({
-      timestamp: -1,
-    }); // Newest first
+    const submissions = await Submission.find({ habitId: habitId as any }).sort(
+      {
+        timestamp: -1,
+      }
+    ); // Newest first
 
     res.json(submissions);
   } catch (error: any) {

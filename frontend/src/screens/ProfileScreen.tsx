@@ -49,43 +49,12 @@ const ProfileScreen = () => {
       </View>
 
       <Text style={styles.subHeader}>Performance History</Text>
-      <View style={styles.chartContainer}>
-        <LineChart
-          data={{
-            labels: stats.labels,
-            datasets: [
-              {
-                data: stats.chartData,
-              },
-            ],
-          }}
-          width={SCREEN_WIDTH - SPACING.m * 4} // from react-native
-          height={220}
-          yAxisLabel=""
-          yAxisSuffix="%"
-          yAxisInterval={1} // optional, defaults to 1
-          chartConfig={{
-            backgroundColor: COLORS.surface,
-            backgroundGradientFrom: COLORS.surface,
-            backgroundGradientTo: COLORS.surface,
-            decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(79, 70, 229, ${opacity})`, // Indigo
-            labelColor: (opacity = 1) => COLORS.textSecondary,
-            style: {
-              borderRadius: 16,
-            },
-            propsForDots: {
-              r: "6",
-              strokeWidth: "2",
-              stroke: COLORS.primary,
-            },
-          }}
-          bezier
-          style={{
-            marginVertical: 8,
-            borderRadius: 16,
-          }}
-        />
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          To view detailed Consistency Heatmaps, Scatter Plots, and Momentum
+          charts, tap on a specific goal in the{" "}
+          <Text style={{ fontWeight: "bold" }}>Home</Text> tab.
+        </Text>
       </View>
     </SafeAreaView>
   );
@@ -156,6 +125,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3.84,
     elevation: 2,
+  },
+  infoCard: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.l,
+    borderRadius: 16,
+    marginBottom: SPACING.l,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3.84,
+    elevation: 2,
+  },
+  infoText: {
+    fontSize: 16,
+    color: COLORS.text,
+    lineHeight: 24,
+    textAlign: "center",
   },
 });
 
