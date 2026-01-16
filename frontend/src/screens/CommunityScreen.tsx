@@ -258,12 +258,6 @@ const CommunityScreen = () => {
   const renderItem = useCallback(
     ({ item }: { item: FeedItem }) => (
       <View style={styles.card}>
-        {/* Fire Animation Overlay */}
-        <FireAnimation
-          visible={showFireAnimation === item._id}
-          onAnimationEnd={() => setShowFireAnimation(null)}
-        />
-
         <Image source={{ uri: item.imageUrl }} style={styles.image} />
         <View style={styles.cardContent}>
           <View style={styles.headerRow}>
@@ -369,6 +363,12 @@ const CommunityScreen = () => {
           </Text>
         </View>
       )}
+
+      {/* Shared Fire Animation Engine */}
+      <FireAnimation
+        visible={!!showFireAnimation}
+        onAnimationEnd={() => setShowFireAnimation(null)}
+      />
 
       {/* Comments Modal */}
       <Modal

@@ -4,6 +4,7 @@ import { verifyImageWithGemini } from "../utils/gemini";
 import Submission from "../models/Submission";
 import Habit from "../models/Habit";
 import fs from "fs";
+import { checkAndResetStreak } from "../utils/streakUtils";
 import "../types/express"; // Extend Express Request with user
 
 // @desc    Verify habit with AI
@@ -31,6 +32,10 @@ export const verifySubmission = async (req: Request, res: Response) => {
         feedback: "Habit not found or not authorized",
       });
     }
+
+    // Lazy Streak Update (Prevent Infinite Streak Exploit)
+    const userTimezone = (req.headers["x-timezone"] as string) || "UTC";
+    await checkAndResetStreak(habit, userTimezone);
 
     // 2. Gemini Verification First (Local File)
     const verification = await verifyImageWithGemini(

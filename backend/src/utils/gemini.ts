@@ -2,7 +2,10 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+  generationConfig: { responseMimeType: "application/json" },
+});
 
 interface IHabitContext {
   title: string;
@@ -101,14 +104,9 @@ export const verifyImageWithGemini = async (
     const response = await result.response;
     const text = response.text();
 
-    // Clean up the text to ensure it's valid JSON (remove markdown code blocks if any)
-    const jsonString = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
+    // Parse the JSON response securely (guaranteed by JSON mode)
     try {
-      return JSON.parse(jsonString);
+      return JSON.parse(text);
     } catch (e) {
       console.error("Failed to parse Gemini response as JSON:", text);
       return {

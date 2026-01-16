@@ -22,7 +22,7 @@ export const checkVerificationLimit = async (
 
     const dailyCount = await Submission.countDocuments({
       user: user._id,
-      aiVerificationResult: true,
+      // Count ALL submissions (success or fail) to prevent API cost abuse
       createdAt: {
         $gte: today,
         $lt: tomorrow,

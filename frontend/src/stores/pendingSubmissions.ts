@@ -11,6 +11,7 @@ export interface PendingSubmission {
   habitTitle: string;
   imageUri: string;
   createdAt: string;
+  status: "pending" | "failed";
   retryCount: number;
   lastError?: string;
 }
@@ -28,6 +29,8 @@ interface PendingSubmissionsState {
   ) => void;
   removeSubmission: (id: string) => void;
   updateSubmissionError: (id: string, error: string) => void;
+  markAsFailed: (id: string, error?: string) => void;
+  retrySubmission: (id: string) => void;
   clearAllSubmissions: () => void;
   syncPendingSubmissions: () => Promise<{
     success: number;
@@ -69,6 +72,7 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
             habitTitle,
             imageUri: newPath, // Store persistent path
             createdAt: new Date().toISOString(),
+            status: "pending",
             retryCount: 0,
           };
 
@@ -88,6 +92,7 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
             habitTitle,
             imageUri: imageUri,
             createdAt: new Date().toISOString(),
+            status: "pending",
             retryCount: 0,
           };
           set((state) => ({
@@ -116,6 +121,35 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
         }));
       },
 
+      markAsFailed: (id, error) => {
+        set((state) => ({
+          submissions: state.submissions.map((s) =>
+            s.id === id
+              ? {
+                  ...s,
+                  status: "failed",
+                  lastError: error || s.lastError,
+                }
+              : s
+          ),
+        }));
+      },
+
+      retrySubmission: (id) => {
+        set((state) => ({
+          submissions: state.submissions.map((s) =>
+            s.id === id
+              ? {
+                  ...s,
+                  status: "pending",
+                  retryCount: 0,
+                  lastError: undefined,
+                }
+              : s
+          ),
+        }));
+      },
+
       clearAllSubmissions: () => {
         set({ submissions: [] });
       },
@@ -124,6 +158,13 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
         const { submissions, isSyncing } = get();
 
         if (isSyncing || submissions.length === 0) {
+          return { success: 0, failed: 0 };
+        }
+
+        // Only sync pending items, skip failed ones until manually retried
+        const pendingItems = submissions.filter((s) => s.status === "pending");
+
+        if (pendingItems.length === 0) {
           return { success: 0, failed: 0 };
         }
 
@@ -139,7 +180,7 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
         let successCount = 0;
         let failedCount = 0;
 
-        for (const submission of submissions) {
+        for (const submission of pendingItems) {
           try {
             console.log(
               `Syncing submission for habit: ${submission.habitTitle}`
@@ -179,9 +220,12 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
               // Mark as failed permanently after 3 retries for client errors
               if (submission.retryCount >= 3) {
                 console.log(
-                  `Removing permanently failed submission: ${submission.habitTitle}`
+                  `Marking submission as permanently failed: ${submission.habitTitle}`
                 );
-                get().removeSubmission(submission.id);
+                get().markAsFailed(
+                  submission.id,
+                  "Max retries reached. Tap to retry."
+                );
               }
             }
           }
