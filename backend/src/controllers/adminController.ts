@@ -67,14 +67,13 @@ export const reviewAppeal = async (req: Request, res: Response) => {
     // Update appeal status
     submission.appealStatus = decision as "approved" | "rejected";
 
-    // If approved, set aiVerificationResult to true so it appears in feed
-    // This allows human override of AI decision
-    if (decision === "approved") {
-      submission.aiVerificationResult = true;
-      // Optionally store admin notes
-      if (adminNotes) {
-        submission.aiFeedback = `[Admin Approved] ${adminNotes}`;
-      }
+    // Store admin notes if provided
+    // Note: We do NOT update aiVerificationResult to preserve AI accuracy data
+    // The feed query uses $or to show both AI-approved and admin-approved posts
+    if (adminNotes) {
+      submission.aiFeedback = `[Admin ${
+        decision === "approved" ? "Approved" : "Rejected"
+      }] ${adminNotes}`;
     }
 
     await submission.save({ session });

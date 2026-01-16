@@ -40,11 +40,14 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
 
     // Pagination parameters
     const limit = parseInt(req.query.limit as string) || 20;
-    const cursor = req.query.cursor as string; // ISO timestamp or submission ID
+    const cursor = req.query.cursor as string; // Format: "timestamp_id"
 
     // Build initial match conditions
+    // Include submissions that are either:
+    // 1. AI-verified (aiVerificationResult: true), OR
+    // 2. Admin-approved after appeal (appealStatus: "approved")
     const matchConditions: any = {
-      aiVerificationResult: true,
+      $or: [{ aiVerificationResult: true }, { appealStatus: "approved" }],
       user: {
         $ne: null,
         $nin: blockedUsers.map((id) => new mongoose.Types.ObjectId(id)),
@@ -52,10 +55,27 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       isFlagged: false,
     };
 
-    // Add cursor-based filtering (for pagination)
+    // Add cursor-based filtering (keyset pagination with timestamp + _id)
+    // This prevents skipped/duplicate items when posts have identical timestamps
     if (cursor) {
-      // Cursor is a timestamp - get posts older than this
-      matchConditions.createdAt = { $lt: new Date(cursor) };
+      const [cursorTime, cursorId] = cursor.split("_");
+
+      if (cursorTime && cursorId) {
+        // Get posts that are either:
+        // 1. Older than cursor timestamp, OR
+        // 2. Same timestamp but with smaller _id (for deterministic ordering)
+        matchConditions.$and = [
+          {
+            $or: [
+              { createdAt: { $lt: new Date(cursorTime) } },
+              {
+                createdAt: new Date(cursorTime),
+                _id: { $lt: new mongoose.Types.ObjectId(cursorId) },
+              },
+            ],
+          },
+        ];
+      }
     }
 
     // 1. Aggregation Pipeline
@@ -158,11 +178,12 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
     const hasMore = results.length > limit;
     const feed = hasMore ? results.slice(0, limit) : results;
 
-    // Determine next cursor (timestamp of last item)
+    // Determine next cursor (timestamp_id of last item for keyset pagination)
     let nextCursor: string | null = null;
     if (hasMore && feed.length > 0) {
       const lastItem = feed[feed.length - 1];
-      nextCursor = lastItem.createdAt.toISOString();
+      // Combine timestamp and ID for unique, deterministic cursor
+      nextCursor = `${lastItem.createdAt.toISOString()}_${lastItem._id}`;
     }
 
     // Map _id to string if needed by frontend (Agg gives ObjectIds, res.json usually handles it but good to be safe)
