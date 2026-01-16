@@ -40,21 +40,34 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       blockedUsers = currentUser.blockedUsers;
     }
 
-    // 1. Find all public habits (Still needed to filter submissions by public habits)
-    const publicHabits = await Habit.find({ isPublic: true }).select("_id");
-    const publicHabitIds = publicHabits.map((h) => h._id);
-
-    // 2. Aggregation Pipeline
+    // 1. Aggregation Pipeline
     const pipeline: any[] = [
       {
         $match: {
-          habitId: { $in: publicHabitIds },
           aiVerificationResult: true,
           user: {
             $ne: null,
             $nin: blockedUsers.map((id) => new mongoose.Types.ObjectId(id)),
           },
           isFlagged: false,
+        },
+      },
+      // Lookup Habit to check visibility
+      {
+        $lookup: {
+          from: "habits",
+          localField: "habitId",
+          foreignField: "_id",
+          as: "habitDetails",
+        },
+      },
+      {
+        $unwind: "$habitDetails",
+      },
+      // Filter for Public Habits Only
+      {
+        $match: {
+          "habitDetails.isPublic": true,
         },
       },
       { $sort: { createdAt: -1 } },
@@ -72,21 +85,6 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
         $unwind: {
           path: "$userDetails",
           preserveNullAndEmptyArrays: false, // Filter out if user doesn't exist
-        },
-      },
-      // Lookup Habit Details
-      {
-        $lookup: {
-          from: "habits",
-          localField: "habitId",
-          foreignField: "_id",
-          as: "habitDetails",
-        },
-      },
-      {
-        $unwind: {
-          path: "$habitDetails",
-          preserveNullAndEmptyArrays: false,
         },
       },
       // Lookup Likes

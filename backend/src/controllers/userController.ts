@@ -5,6 +5,7 @@ import User from "../models/User";
 import Habit from "../models/Habit";
 import Like from "../models/Like";
 import Comment from "../models/Comment";
+import Submission from "../models/Submission";
 import "../types/express"; // Extend Express Request with user
 
 const generateToken = (id: string) => {
@@ -118,9 +119,7 @@ export const getUserStats = async (req: Request, res: Response) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Dynamic import to avoid circular dependency issues if they exist,
-    // or just import at top if clean. Let's use the model directly.
-    const Submission = require("../models/Submission").default;
+    // Use the model directly.
 
     const dailyVerifications = await Submission.countDocuments({
       user: req.user!._id,
@@ -159,7 +158,6 @@ export const deleteUser = async (req: Request, res: Response) => {
 
     // Delete related data first
     // 1. Delete Submissions
-    const Submission = require("../models/Submission").default;
     await Submission.deleteMany({ user: userId });
 
     // 2. Delete Habits

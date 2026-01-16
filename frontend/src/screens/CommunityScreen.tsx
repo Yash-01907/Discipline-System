@@ -255,92 +255,98 @@ const CommunityScreen = () => {
     );
   }
 
-  const renderItem = ({ item }: { item: FeedItem }) => (
-    <View style={styles.card}>
-      {/* Fire Animation Overlay */}
-      <FireAnimation
-        visible={showFireAnimation === item._id}
-        onAnimationEnd={() => setShowFireAnimation(null)}
-      />
+  const renderItem = useCallback(
+    ({ item }: { item: FeedItem }) => (
+      <View style={styles.card}>
+        {/* Fire Animation Overlay */}
+        <FireAnimation
+          visible={showFireAnimation === item._id}
+          onAnimationEnd={() => setShowFireAnimation(null)}
+        />
 
-      <Image source={{ uri: item.imageUrl }} style={styles.image} />
-      <View style={styles.cardContent}>
-        <View style={styles.headerRow}>
-          <View style={styles.userInfoRow}>
-            <Text style={styles.userName}>{item.userName}</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>✓ VERIFIED</Text>
+        <Image source={{ uri: item.imageUrl }} style={styles.image} />
+        <View style={styles.cardContent}>
+          <View style={styles.headerRow}>
+            <View style={styles.userInfoRow}>
+              <Text style={styles.userName}>{item.userName}</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>✓ VERIFIED</Text>
+              </View>
             </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => showOptions(item)}
-            style={styles.optionsButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.optionsIcon}>⋮</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.habitTitle}>{item.habitTitle}</Text>
-        <View style={styles.verdictContainer}>
-          <Text style={styles.verdictLabel}>AI VERDICT:</Text>
-          <Text style={styles.verdictText}>"{item.aiFeedback}"</Text>
-        </View>
-
-        {/* Interaction Row */}
-        <View style={styles.interactionRow}>
-          <TouchableOpacity
-            style={styles.interactionButton}
-            onPress={() => handleLike(item)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.interactionIcon}>
-              {item.isLiked ? "❤️" : "🤍"}
-            </Text>
-            <Text
-              style={[
-                styles.interactionCount,
-                item.isLiked && styles.interactionCountActive,
-              ]}
+            <TouchableOpacity
+              onPress={() => showOptions(item)}
+              style={styles.optionsButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              {item.likeCount}
+              <Text style={styles.optionsIcon}>⋮</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.habitTitle}>{item.habitTitle}</Text>
+          <View style={styles.verdictContainer}>
+            <Text style={styles.verdictLabel}>AI VERDICT:</Text>
+            <Text style={styles.verdictText}>"{item.aiFeedback}"</Text>
+          </View>
+
+          {/* Interaction Row */}
+          <View style={styles.interactionRow}>
+            <TouchableOpacity
+              style={styles.interactionButton}
+              onPress={() => handleLike(item)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.interactionIcon}>
+                {item.isLiked ? "❤️" : "🤍"}
+              </Text>
+              <Text
+                style={[
+                  styles.interactionCount,
+                  item.isLiked && styles.interactionCountActive,
+                ]}
+              >
+                {item.likeCount}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.interactionButton}
+              onPress={() => openComments(item)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.interactionIcon}>💬</Text>
+              <Text style={styles.interactionCount}>{item.commentCount}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.timestamp}>
+              {new Date(item.timestamp).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.interactionButton}
-            onPress={() => openComments(item)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.interactionIcon}>💬</Text>
-            <Text style={styles.interactionCount}>{item.commentCount}</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.timestamp}>
-            {new Date(item.timestamp).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
+          </View>
         </View>
       </View>
-    </View>
+    ),
+    [showFireAnimation, handleLike, openComments, showOptions]
   );
 
-  const renderComment = ({ item }: { item: Comment }) => (
-    <View style={styles.commentItem}>
-      <Text style={styles.commentUserName}>{item.userName}</Text>
-      <Text style={styles.commentText}>{item.text}</Text>
-      <Text style={styles.commentTime}>
-        {new Date(item.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-      </Text>
-    </View>
+  const renderComment = useCallback(
+    ({ item }: { item: Comment }) => (
+      <View style={styles.commentItem}>
+        <Text style={styles.commentUserName}>{item.userName}</Text>
+        <Text style={styles.commentText}>{item.text}</Text>
+        <Text style={styles.commentTime}>
+          {new Date(item.createdAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </View>
+    ),
+    []
   );
 
   return (
