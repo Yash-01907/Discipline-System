@@ -6,6 +6,10 @@ import Habit from "../models/Habit";
 import Like from "../models/Like";
 import Comment from "../models/Comment";
 import Submission from "../models/Submission";
+import {
+  registerUserSchema,
+  loginUserSchema,
+} from "../schemas/validationSchemas";
 import "../types/express"; // Extend Express Request with user
 
 const generateToken = (id: string) => {
@@ -18,12 +22,15 @@ const generateToken = (id: string) => {
 // @route   POST /api/users
 // @access  Public
 export const registerUser = async (req: Request, res: Response) => {
-  const { name, email, password } = req.body;
+  const validation = registerUserSchema.safeParse(req.body);
 
-  if (!name || !email || !password) {
-    res.status(400).json({ message: "Please add all fields" });
+  if (!validation.success) {
+    const errorMessage = validation.error.issues[0].message;
+    res.status(400).json({ message: errorMessage });
     return;
   }
+
+  const { name, email, password } = validation.data;
 
   // Check if user exists
   const userExists = await User.findOne({ email });
@@ -60,7 +67,17 @@ export const registerUser = async (req: Request, res: Response) => {
 // @route   POST /api/users/login
 // @access  Public
 export const loginUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const validation = loginUserSchema.safeParse(req.body);
+
+  if (!validation.success) {
+    const errorMessage = validation.error.issues[0].message;
+    // Don't return strict validation errors for login mostly for security (user enum check etc), but basic format is ok
+    // Actually generic "Invalid credentials" is better security practice but Zod ensures we are working with string fields which is good.
+    // I'll return specific validation error (like empty field) for UX, but credentials check happens later.
+    return res.status(400).json({ message: errorMessage });
+  }
+
+  const { email, password } = validation.data;
 
   // Check for user email
   const user = await User.findOne({ email });

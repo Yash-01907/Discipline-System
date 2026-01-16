@@ -35,6 +35,14 @@ export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
     // Log the event for debugging
     console.log(`RevenueCat Webhook: ${type} for user ${app_user_id}`);
 
+    // Verify ID Format
+    const { isValidObjectId } = require("mongoose");
+    if (!isValidObjectId(app_user_id)) {
+      console.warn(`Invalid MongoDB ID received: ${app_user_id}. Skipping.`);
+      // Return 200 to acknowledge receipt even if we can't process it (to stop RC from retrying)
+      return res.status(200).json({ message: "Skipped: Invalid User ID" });
+    }
+
     // Find user by ID (RevenueCat app_user_id should match our MongoDB _id)
     const user = await User.findById(app_user_id);
 

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { toZonedTime } from "date-fns-tz";
 import { differenceInCalendarDays } from "date-fns";
 import Habit from "../models/Habit";
+import { createHabitSchema } from "../schemas/validationSchemas";
 import "../types/express"; // Extend Express Request with user
 
 // @desc    Get all habits
@@ -85,6 +86,14 @@ export const getHabits = async (req: Request, res: Response) => {
 // @access  Private
 export const createHabit = async (req: Request, res: Response) => {
   try {
+    const validation = createHabitSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      // Return the first error message for simplicity or full object
+      const errorMessage = validation.error.issues[0].message;
+      return res.status(400).json({ message: errorMessage });
+    }
+
     const {
       title,
       description,
@@ -93,7 +102,7 @@ export const createHabit = async (req: Request, res: Response) => {
       targetDate,
       strictness,
       isPublic,
-    } = req.body;
+    } = validation.data;
 
     const habit = await Habit.create({
       user: req.user!._id,
@@ -102,8 +111,8 @@ export const createHabit = async (req: Request, res: Response) => {
       frequency,
       type,
       targetDate,
-      strictness: strictness || "medium",
-      isPublic: isPublic || false,
+      strictness,
+      isPublic,
     });
 
     res.status(201).json(habit);

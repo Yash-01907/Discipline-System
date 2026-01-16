@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../types/navigation";
 import { useVerifySubmission } from "../hooks/useHabits";
@@ -100,7 +101,13 @@ const VerifyScreen = ({ route, navigation }: Props) => {
       try {
         const photo = await cameraRef.current.takePictureAsync();
         if (photo) {
-          setCapturedImage(photo.uri);
+          // Compress the image
+          const compressed = await manipulateAsync(
+            photo.uri,
+            [{ resize: { width: 1080 } }], // Resize to reasonable width
+            { compress: 0.7, format: SaveFormat.JPEG } // Compress to 70% quality
+          );
+          setCapturedImage(compressed.uri);
         }
       } catch (e) {
         Alert.alert("Error", "Failed to capture image");
@@ -113,11 +120,21 @@ const VerifyScreen = ({ route, navigation }: Props) => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 1, // We get high quality from picker, then compress our way
     });
 
     if (!result.canceled) {
-      setCapturedImage(result.assets[0].uri);
+      try {
+        const compressed = await manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 1080 } }],
+          { compress: 0.7, format: SaveFormat.JPEG }
+        );
+        setCapturedImage(compressed.uri);
+      } catch (e) {
+        // Fallback to original if compression fails
+        setCapturedImage(result.assets[0].uri);
+      }
     }
   };
 

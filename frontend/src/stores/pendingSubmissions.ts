@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import * as FileSystem from "expo-file-system";
 import { verifySubmission } from "../api/habits";
 
 export interface PendingSubmission {
@@ -46,23 +47,53 @@ export const usePendingSubmissions = create<PendingSubmissionsState>()(
       isSyncing: false,
       lastSyncAttempt: null,
 
-      addSubmission: (habitId, habitTitle, imageUri) => {
-        const newSubmission: PendingSubmission = {
-          id: `pending-${Date.now()}-${Math.random()
-            .toString(36)
-            .substr(2, 9)}`,
-          habitId,
-          habitTitle,
-          imageUri,
-          createdAt: new Date().toISOString(),
-          retryCount: 0,
-        };
+      addSubmission: async (habitId, habitTitle, imageUri) => {
+        try {
+          // Move file from cache to document directory for persistence
+          const fileName = imageUri.split("/").pop();
+          // Ensure documentDirectory is not null (though it rarely is on devices)
+          // @ts-ignore
+          const docDir = FileSystem.documentDirectory || "";
+          const newPath = `${docDir}${fileName}`;
 
-        set((state) => ({
-          submissions: [...state.submissions, newSubmission],
-        }));
+          await FileSystem.moveAsync({
+            from: imageUri,
+            to: newPath,
+          });
 
-        console.log(`Added pending submission for habit: ${habitTitle}`);
+          const newSubmission: PendingSubmission = {
+            id: `pending-${Date.now()}-${Math.random()
+              .toString(36)
+              .substr(2, 9)}`,
+            habitId,
+            habitTitle,
+            imageUri: newPath, // Store persistent path
+            createdAt: new Date().toISOString(),
+            retryCount: 0,
+          };
+
+          set((state) => ({
+            submissions: [...state.submissions, newSubmission],
+          }));
+
+          console.log(`Added pending submission (persistent): ${habitTitle}`);
+        } catch (error) {
+          console.error("Failed to save pending submission image:", error);
+          // Fallback: Try to add with original URI if move fails
+          const newSubmission: PendingSubmission = {
+            id: `pending-${Date.now()}-${Math.random()
+              .toString(36)
+              .substr(2, 9)}`,
+            habitId,
+            habitTitle,
+            imageUri: imageUri,
+            createdAt: new Date().toISOString(),
+            retryCount: 0,
+          };
+          set((state) => ({
+            submissions: [...state.submissions, newSubmission],
+          }));
+        }
       },
 
       removeSubmission: (id) => {

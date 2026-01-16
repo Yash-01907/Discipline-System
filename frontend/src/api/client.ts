@@ -1,6 +1,7 @@
 import axios from "axios";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const getBackendUrl = () => {
   // 1. If explicitly defined in creating the build/env, use it (Production)
@@ -17,7 +18,10 @@ const getBackendUrl = () => {
   }
 
   // 3. Fallback for Android Emulator (10.0.2.2) or iOS Simulator (localhost)
-  // if we can't detect host
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:5000/api";
+  }
+
   return "http://localhost:5000/api";
 };
 
