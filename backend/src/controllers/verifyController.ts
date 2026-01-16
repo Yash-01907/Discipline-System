@@ -4,11 +4,12 @@ import { verifyImageWithGemini } from "../utils/gemini";
 import Submission from "../models/Submission";
 import Habit from "../models/Habit";
 import fs from "fs";
+import "../types/express"; // Extend Express Request with user
 
 // @desc    Verify habit with AI
 // @route   POST /api/verify
 // @access  Private
-export const verifySubmission = async (req: any, res: Response) => {
+export const verifySubmission = async (req: Request, res: Response) => {
   if (!req.file) {
     return res
       .status(400)
@@ -19,7 +20,10 @@ export const verifySubmission = async (req: any, res: Response) => {
 
   try {
     // 1. Find Habit (and ensure ownership)
-    const habit = await Habit.findOne({ _id: habitId, user: req.user.id });
+    const habit = await Habit.findOne({
+      _id: habitId,
+      user: req.user!.id,
+    } as any);
     if (!habit) {
       return res.status(404).json({
         success: false,
@@ -58,7 +62,7 @@ export const verifySubmission = async (req: any, res: Response) => {
 
     // 6. Log Submission
     await Submission.create({
-      user: req.user.id,
+      user: req.user!.id as any,
       habitId,
       imageUrl,
       aiVerificationResult: verification.verified,

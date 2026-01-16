@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { verifySubmission } from "../controllers/verifyController";
+import { protect } from "../middleware/authMiddleware";
 import path from "path";
 
 const router = express.Router();
@@ -16,6 +17,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-router.post("/", upload.single("image"), verifySubmission);
+router.post("/", protect, upload.single("image"), verifySubmission);
 
 export default router;

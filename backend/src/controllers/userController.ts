@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
 import Habit from "../models/Habit";
+import "../types/express"; // Extend Express Request with user
 
 const generateToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "default_secret_for_dev", {
@@ -76,16 +77,16 @@ export const loginUser = async (req: Request, res: Response) => {
 // @desc    Get user data
 // @route   GET /api/users/me
 // @access  Private
-export const getMe = async (req: any, res: Response) => {
+export const getMe = async (req: Request, res: Response) => {
   res.status(200).json(req.user);
 };
 
 // @desc    Get user stats
 // @route   GET /api/users/stats
 // @access  Private
-export const getUserStats = async (req: any, res: Response) => {
+export const getUserStats = async (req: Request, res: Response) => {
   try {
-    const habits = await Habit.find({ user: req.user.id });
+    const habits = await Habit.find({ user: req.user!.id as any });
 
     const totalHabits = habits.length;
     let totalCompleted = 0;
