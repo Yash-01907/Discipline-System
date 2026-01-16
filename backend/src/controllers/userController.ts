@@ -89,23 +89,21 @@ export const getMe = async (req: Request, res: Response) => {
 // @access  Private
 export const getUserStats = async (req: Request, res: Response) => {
   try {
-    const habits = await Habit.find({ user: req.user!._id });
+    const stats = await Habit.aggregate([
+      { $match: { user: req.user!._id } },
+      {
+        $group: {
+          _id: null,
+          totalHabits: { $sum: 1 },
+          totalCompleted: { $sum: { $size: "$completedDates" } },
+          globalStreak: { $sum: "$currentStreak" },
+        },
+      },
+    ]);
 
-    const totalHabits = habits.length;
-    let totalCompleted = 0;
-
-    // Calculate global streak (simplified logic: max streak of any habit for now, or unified timeline)
-    // For MVP, let's sum up total completed completions
-    habits.forEach((h) => {
-      totalCompleted += h.completedDates.length;
-    });
-
-    // Calculate Discipline Score (0-100)
-    // Formula: Average consistency across all active habits
-    // Or simpler: (Total Completed / (Total Potential Days?)) * 100
-    // Let's use a "Momentum Score": Sum of all current streaks * 10 + Verification Quality (future)
-    // For now: Sum of all current streaks.
-    const globalStreak = habits.reduce((acc, h) => acc + h.currentStreak, 0);
+    const totalHabits = stats.length > 0 ? stats[0].totalHabits : 0;
+    const totalCompleted = stats.length > 0 ? stats[0].totalCompleted : 0;
+    const globalStreak = stats.length > 0 ? stats[0].globalStreak : 0;
 
     const score = Math.min(
       100,

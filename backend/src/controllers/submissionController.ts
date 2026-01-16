@@ -14,9 +14,11 @@ export const getHabitSubmissions = async (req: Request, res: Response) => {
     const submissions = await Submission.find({
       habitId: habitId,
       user: req.user!._id,
-    }).sort({
-      timestamp: -1,
-    });
+    })
+      .sort({
+        timestamp: -1,
+      })
+      .lean();
 
     res.json(submissions);
   } catch (error: any) {
@@ -110,7 +112,8 @@ export const getAppealedSubmissions = async (req: Request, res: Response) => {
       .sort({ appealedAt: -1 })
       .limit(limit)
       .populate("habitId", "title description")
-      .populate("user", "name");
+      .populate("user", "name")
+      .lean();
 
     res.json(submissions);
   } catch (error: any) {

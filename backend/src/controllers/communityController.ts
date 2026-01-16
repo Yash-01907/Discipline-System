@@ -273,7 +273,8 @@ export const getComments = async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("user", "name");
+      .populate("user", "name")
+      .lean();
 
     const formattedComments = comments.map((c: any) => ({
       _id: c._id,
