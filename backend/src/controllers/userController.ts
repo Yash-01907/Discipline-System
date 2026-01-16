@@ -86,7 +86,7 @@ export const getMe = async (req: Request, res: Response) => {
 // @access  Private
 export const getUserStats = async (req: Request, res: Response) => {
   try {
-    const habits = await Habit.find({ user: req.user!.id as any });
+    const habits = await Habit.find({ user: req.user!._id });
 
     const totalHabits = habits.length;
     let totalCompleted = 0;
@@ -121,7 +121,7 @@ export const getUserStats = async (req: Request, res: Response) => {
     const Submission = require("../models/Submission").default;
 
     const dailyVerifications = await Submission.countDocuments({
-      user: req.user!.id,
+      user: req.user!._id,
       createdAt: {
         $gte: today,
         $lt: tomorrow,
@@ -129,7 +129,7 @@ export const getUserStats = async (req: Request, res: Response) => {
     });
 
     // cast to any for plan property
-    const userPlan = (req.user as any).plan || "free";
+    const userPlan = req.user!.plan || "free";
     const dailyLimit = userPlan === "free" ? 3 : Infinity;
 
     res.status(200).json({
@@ -153,7 +153,7 @@ export const getUserStats = async (req: Request, res: Response) => {
 // @access  Private
 export const deleteUser = async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user!._id;
 
     // Delete related data first
     // 1. Delete Submissions

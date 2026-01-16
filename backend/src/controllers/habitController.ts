@@ -7,7 +7,7 @@ import "../types/express"; // Extend Express Request with user
 // @access  Private
 export const getHabits = async (req: Request, res: Response) => {
   try {
-    const habits = await Habit.find({ user: req.user!.id as any }).sort({
+    const habits = await Habit.find({ user: req.user!._id }).sort({
       createdAt: -1,
     });
 
@@ -89,7 +89,7 @@ export const createHabit = async (req: Request, res: Response) => {
     } = req.body;
 
     const habit = await Habit.create({
-      user: req.user!.id as any,
+      user: req.user!._id,
       title,
       description,
       frequency,

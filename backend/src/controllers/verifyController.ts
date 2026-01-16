@@ -17,14 +17,14 @@ export const verifySubmission = async (req: Request, res: Response) => {
   }
 
   const { habitId } = req.body;
-  const user = req.user as any;
+  // user is already available in req.user
 
   try {
     // 1. Find Habit (and ensure ownership)
     const habit = await Habit.findOne({
       _id: habitId,
-      user: req.user!.id,
-    } as any);
+      user: req.user!._id,
+    });
     if (!habit) {
       return res.status(404).json({
         success: false,
@@ -46,7 +46,7 @@ export const verifySubmission = async (req: Request, res: Response) => {
       {
         title: habit.title,
         description: habit.description,
-        strictness: habit.strictness as any, // Cast string to union type
+        strictness: habit.strictness as "low" | "medium" | "high", // Cast string to union type
       },
       req.file.mimetype
     );
@@ -63,7 +63,7 @@ export const verifySubmission = async (req: Request, res: Response) => {
 
     // 6. Log Submission
     const submission = await Submission.create({
-      user: req.user!.id as any,
+      user: req.user!._id,
       habitId,
       imageUrl,
       aiVerificationResult: verification.verified,

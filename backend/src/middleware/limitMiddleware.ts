@@ -6,7 +6,7 @@ export const checkVerificationLimit = async (
   res: Response,
   next: NextFunction
 ) => {
-  const user = req.user as any;
+  const user = req.user;
 
   // Ensure user exists (should be handled by protect middleware, but safe to check)
   if (!user) {

@@ -12,9 +12,9 @@ export const getHabitSubmissions = async (req: Request, res: Response) => {
     // Ensure the submission belongs to the user
     // We cast habitId to any because Mongoose can handle string->ObjectId, and explicit filter ensures scoping
     const submissions = await Submission.find({
-      habitId: habitId as any,
-      user: req.user!.id as any,
-    } as any).sort({
+      habitId: habitId,
+      user: req.user!._id,
+    }).sort({
       timestamp: -1,
     });
 
@@ -31,7 +31,7 @@ export const appealSubmission = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
     const { reason } = req.body;
-    const userId = req.user!.id;
+    const userId = req.user!._id;
 
     // Find the submission
     const submission = await Submission.findById(submissionId);
@@ -105,7 +105,7 @@ export const getAppealedSubmissions = async (req: Request, res: Response) => {
 
     const submissions = await Submission.find({
       isAppealed: true,
-      appealStatus: status as any,
+      appealStatus: status as "none" | "pending" | "approved" | "rejected",
     })
       .sort({ appealedAt: -1 })
       .limit(limit)

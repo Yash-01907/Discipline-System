@@ -5,6 +5,7 @@ import Like from "../models/Like";
 import Comment from "../models/Comment";
 import User from "../models/User";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 // @desc    Get public community feed
 // @route   GET /api/community/feed
@@ -35,88 +36,119 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
     const currentUserId = currentUser?._id;
     let blockedUsers: any[] = [];
 
-    if (currentUser) {
-      blockedUsers = currentUser.blockedUsers || [];
+    if (currentUser && currentUser.blockedUsers) {
+      blockedUsers = currentUser.blockedUsers;
     }
 
-    // 1. Find all public habits
+    // 1. Find all public habits (Still needed to filter submissions by public habits)
     const publicHabits = await Habit.find({ isPublic: true }).select("_id");
     const publicHabitIds = publicHabits.map((h) => h._id);
 
-    // 2. Find verified submissions for those habits
-    // Filter:
-    // - Verified
-    // - Not Flagged
-    // - Not from Blocked Users
-    const query: any = {
-      habitId: { $in: publicHabitIds },
-      aiVerificationResult: true,
-      user: { $ne: null },
-      isFlagged: false, // content moderation
-    };
+    // 2. Aggregation Pipeline
+    const pipeline: any[] = [
+      {
+        $match: {
+          habitId: { $in: publicHabitIds },
+          aiVerificationResult: true,
+          user: {
+            $ne: null,
+            $nin: blockedUsers.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+          isFlagged: false,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $limit: 50 },
+      // Lookup User Details
+      {
+        $lookup: {
+          from: "users",
+          localField: "user",
+          foreignField: "_id",
+          as: "userDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$userDetails",
+          preserveNullAndEmptyArrays: false, // Filter out if user doesn't exist
+        },
+      },
+      // Lookup Habit Details
+      {
+        $lookup: {
+          from: "habits",
+          localField: "habitId",
+          foreignField: "_id",
+          as: "habitDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$habitDetails",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      // Lookup Likes
+      {
+        $lookup: {
+          from: "likes",
+          localField: "_id",
+          foreignField: "submission",
+          as: "likes",
+        },
+      },
+      // Lookup Comments
+      {
+        $lookup: {
+          from: "comments",
+          localField: "_id",
+          foreignField: "submission",
+          as: "comments",
+        },
+      },
+      // Add counts and isLiked
+      {
+        $addFields: {
+          likeCount: { $size: "$likes" },
+          commentCount: { $size: "$comments" },
+          isLiked: {
+            $in: [
+              currentUserId ? new mongoose.Types.ObjectId(currentUserId) : null,
+              "$likes.user",
+            ],
+          },
+        },
+      },
+      // Project final shape
+      {
+        $project: {
+          _id: 1,
+          imageUrl: 1,
+          aiFeedback: 1,
+          hashtag: 1, // Optional if you have it
+          createdAt: 1,
+          habitTitle: "$habitDetails.title",
+          habitDescription: "$habitDetails.description",
+          userName: "$userDetails.name",
+          userId: "$userDetails._id",
+          likeCount: 1,
+          commentCount: 1,
+          isLiked: 1,
+        },
+      },
+    ];
 
-    if (blockedUsers.length > 0) {
-      query.user = { $ne: null, $nin: blockedUsers };
-    }
+    const feed = await Submission.aggregate(pipeline);
 
-    const submissions = await Submission.find(query)
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .populate("habitId", "title description")
-      .populate("user", "name");
-
-    // 3. Filter out any submissions where populate returned null
-    const validSubmissions = submissions.filter(
-      (sub: any) => sub.user !== null && sub.habitId !== null
-    );
-
-    // 4. Get like counts and comment counts for all submissions
-    const submissionIds = validSubmissions.map((s) => s._id);
-
-    const [likeCounts, commentCounts, userLikes] = await Promise.all([
-      Like.aggregate([
-        { $match: { submission: { $in: submissionIds } } },
-        { $group: { _id: "$submission", count: { $sum: 1 } } },
-      ]),
-      Comment.aggregate([
-        { $match: { submission: { $in: submissionIds } } },
-        { $group: { _id: "$submission", count: { $sum: 1 } } },
-      ]),
-      currentUserId
-        ? Like.find({
-            user: currentUserId,
-            submission: { $in: submissionIds } as any,
-          }).select("submission")
-        : Promise.resolve([]),
-    ]);
-
-    // Create lookup maps
-    const likeCountMap = new Map(
-      likeCounts.map((l: any) => [l._id.toString(), l.count])
-    );
-    const commentCountMap = new Map(
-      commentCounts.map((c: any) => [c._id.toString(), c.count])
-    );
-    const userLikedSet = new Set(
-      userLikes.map((l: any) => l.submission.toString())
-    );
-
-    // 5. Format response with interaction data
-    const feed = validSubmissions.map((sub: any) => ({
-      _id: sub._id,
-      imageUrl: sub.imageUrl,
-      habitTitle: sub.habitId?.title || "Unknown Habit",
-      habitDescription: sub.habitId?.description || "",
-      userName: sub.user?.name || "Anonymous",
-      userId: sub.user?._id,
-      aiFeedback: sub.aiFeedback,
-      timestamp: sub.createdAt,
-      likeCount: likeCountMap.get(sub._id.toString()) || 0,
-      commentCount: commentCountMap.get(sub._id.toString()) || 0,
-      isLiked: userLikedSet.has(sub._id.toString()),
+    // Map _id to string if needed by frontend (Agg gives ObjectIds, res.json usually handles it but good to be safe)
+    // Also rename createdAt to timestamp to match frontend expectation
+    const formattedFeed = feed.map((item) => ({
+      ...item,
+      timestamp: item.createdAt,
     }));
 
-    res.json(feed);
+    res.json(formattedFeed);
   } catch (error: any) {
     console.error("Community Feed Error:", error);
     res.status(500).json({ message: error.message });
@@ -129,7 +161,7 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
 export const toggleLike = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
-    const userId = (req as any).user._id;
+    const userId = req.user!._id;
 
     // Check if submission exists
     const submission = await Submission.findById(submissionId);
@@ -140,7 +172,7 @@ export const toggleLike = async (req: Request, res: Response) => {
     // Check if user already liked this submission
     const existingLike = await Like.findOne({
       user: userId,
-      submission: submissionId as any,
+      submission: submissionId,
     });
 
     let isLiked: boolean;
@@ -154,13 +186,13 @@ export const toggleLike = async (req: Request, res: Response) => {
       // Like - add new like
       await Like.create({
         user: userId,
-        submission: submissionId as any,
+        submission: submissionId,
       });
       isLiked = true;
     }
 
     // Get updated like count
-    likeCount = await Like.countDocuments({ submission: submissionId as any });
+    likeCount = await Like.countDocuments({ submission: submissionId });
 
     res.json({
       success: true,
@@ -180,7 +212,7 @@ export const addComment = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
     const { text } = req.body;
-    const userId = (req as any).user._id;
+    const userId = req.user!._id;
 
     // Validate text
     if (!text || text.trim().length === 0) {
@@ -202,7 +234,7 @@ export const addComment = async (req: Request, res: Response) => {
     // Create comment
     const comment = await Comment.create({
       user: userId,
-      submission: submissionId as any,
+      submission: submissionId,
       text: text.trim(),
     });
 
@@ -211,7 +243,7 @@ export const addComment = async (req: Request, res: Response) => {
 
     // Get updated comment count
     const commentCount = await Comment.countDocuments({
-      submission: submissionId as any,
+      submission: submissionId,
     });
 
     res.status(201).json({
@@ -239,7 +271,7 @@ export const getComments = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = parseInt(req.query.skip as string) || 0;
 
-    const comments = await Comment.find({ submission: submissionId as any })
+    const comments = await Comment.find({ submission: submissionId })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -280,7 +312,7 @@ export const reportSubmission = async (req: Request, res: Response) => {
 export const blockUser = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params; // ID of user to block
-    const currentUserId = (req as any).user._id;
+    const currentUserId = req.user!._id;
 
     if (userId === currentUserId.toString()) {
       return res.status(400).json({ message: "Cannot block yourself" });
