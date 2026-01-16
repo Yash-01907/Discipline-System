@@ -1,0 +1,37 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import connectDB from "./config/db";
+import habitRoutes from "./routes/habitRoutes";
+import verifyRoutes from "./routes/verifyRoutes";
+import path from "path";
+import fs from "fs";
+
+dotenv.config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Routes
+app.use("/api/habits", habitRoutes);
+app.use("/api/verify", verifyRoutes);
+
+// Health Check
+app.get("/", (req, res) => {
+  res.send("VeriHabit API is running");
+});
+
+// Database Connection
+connectDB();
+
+export default app;
