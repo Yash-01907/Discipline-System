@@ -1,30 +1,49 @@
 import axios from "axios";
-import { Platform } from "react-native";
 import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
 
-let baseURL = "http://localhost:5000/api";
-
-if (Platform.OS !== "web") {
-  // Try to get the host URI from Expo config (works for physical devices via Expo Go)
-  const debuggerHost = Constants.expoConfig?.hostUri;
-
-  if (debuggerHost) {
-    // debuggerHost is in format "192.168.x.x:8081". We extract the IP.
-    const ip = debuggerHost.split(":")[0];
-    baseURL = `http://${ip}:5000/api`;
-  } else if (Platform.OS === "android") {
-    // Fallback for Android Emulator if hostUri is missing
-    baseURL = "http://10.0.2.2:5000/api";
+const getBackendUrl = () => {
+  // 1. If explicitly defined in creating the build/env, use it (Production)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
-}
 
-console.log("Connecting to Backend at:", baseURL);
+  // 2. In development (Expo Go), dynamically grab the host IP
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  if (debuggerHost) {
+    const ip = debuggerHost.split(":")[0];
+    // Port 5000 is our backend port
+    return `http://${ip}:5000/api`;
+  }
+
+  // 3. Fallback for Android Emulator (10.0.2.2) or iOS Simulator (localhost)
+  // if we can't detect host
+  return "http://localhost:5000/api";
+};
 
 const client = axios.create({
-  baseURL,
+  baseURL: getBackendUrl(),
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+// Add a request interceptor to inject the token
+client.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await SecureStore.getItemAsync("userToken");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.log("Error fetching token", error);
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export default client;

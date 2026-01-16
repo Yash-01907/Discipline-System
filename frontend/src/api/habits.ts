@@ -24,6 +24,7 @@ export const createHabit = async (habit: {
   frequency: string;
   type?: string;
   targetDate?: Date;
+  isPublic?: boolean;
 }) => {
   const { data } = await client.post("/habits", habit);
   return data;

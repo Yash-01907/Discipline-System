@@ -7,8 +7,8 @@ import fs from "fs";
 
 // @desc    Verify habit with AI
 // @route   POST /api/verify
-// @access  Public
-export const verifySubmission = async (req: Request, res: Response) => {
+// @access  Private
+export const verifySubmission = async (req: any, res: Response) => {
   if (!req.file) {
     return res
       .status(400)
@@ -18,14 +18,13 @@ export const verifySubmission = async (req: Request, res: Response) => {
   const { habitId } = req.body;
 
   try {
-    // 1. Find Habit
-    const habit = await Habit.findById(habitId);
+    // 1. Find Habit (and ensure ownership)
+    const habit = await Habit.findOne({ _id: habitId, user: req.user.id });
     if (!habit) {
-      // Cleanup
-      fs.unlinkSync(req.file.path);
-      return res
-        .status(404)
-        .json({ success: false, feedback: "Habit not found" });
+      return res.status(404).json({
+        success: false,
+        feedback: "Habit not found or not authorized",
+      });
     }
 
     // 2. Upload to Cloudinary
@@ -36,16 +35,18 @@ export const verifySubmission = async (req: Request, res: Response) => {
 
     // 3. Gemini Verification
     // We use the local file path for Gemini analysis as it's efficient
+    // We pass the full habit object (as any to satisfy IHabitContext duck typing)
     const verification = await verifyImageWithGemini(
       req.file.path,
-      habit.title,
+      {
+        title: habit.title,
+        description: habit.description,
+        strictness: habit.strictness as any, // Cast string to union type
+      },
       req.file.mimetype
     );
 
-    // 4. Cleanup local file
-    fs.unlinkSync(req.file.path);
-
-    // 5. Handle Outcome
+    // 4. Handle Outcome
     if (verification.verified) {
       // Update streak
       habit.currentStreak += 1;
@@ -53,12 +54,11 @@ export const verifySubmission = async (req: Request, res: Response) => {
       await habit.save();
     } else {
       // Reset streak? or just don't increment.
-      // User requirement: "If verified: false: Return the reason to the user and reject the submission."
-      // It doesn't say reset streak.
     }
 
     // 6. Log Submission
     await Submission.create({
+      user: req.user.id,
       habitId,
       imageUrl,
       aiVerificationResult: verification.verified,
@@ -72,12 +72,14 @@ export const verifySubmission = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error(error);
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     res.status(500).json({
       success: false,
       feedback: "Server Validation Error: " + error.message,
     });
+  } finally {
+    // Ensure local file is always deleted
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
   }
 };

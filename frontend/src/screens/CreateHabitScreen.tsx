@@ -31,6 +31,7 @@ const CreateHabitScreen = () => {
   const [description, setDescription] = useState("");
   const [type, setType] = useState<"recurring" | "one-time">("recurring");
   const [frequency, setFrequency] = useState("Daily");
+  const [isPublic, setIsPublic] = useState(false);
 
   const handleSubmit = () => {
     if (!title || !description) {
@@ -45,6 +46,7 @@ const CreateHabitScreen = () => {
         frequency,
         type,
         targetDate: type === "one-time" ? new Date() : undefined,
+        isPublic,
       },
       {
         onSuccess: () => {
@@ -161,6 +163,24 @@ const CreateHabitScreen = () => {
             </View>
           </View>
         )}
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>PRIVACY</Text>
+          <TouchableOpacity
+            style={styles.privacyToggle}
+            onPress={() => setIsPublic(!isPublic)}
+          >
+            <View style={[styles.checkbox, isPublic && styles.checkboxActive]}>
+              {isPublic && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <View style={styles.privacyTextContainer}>
+              <Text style={styles.privacyTitle}>Share on Community Feed</Text>
+              <Text style={styles.privacySubtitle}>
+                Your verified submissions will appear publicly
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.submitButton}
@@ -297,6 +317,46 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
     letterSpacing: 1,
+  },
+  privacyToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    padding: SPACING.m,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: SPACING.m,
+  },
+  checkboxActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkmark: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  privacyTextContainer: {
+    flex: 1,
+  },
+  privacyTitle: {
+    color: COLORS.text,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  privacySubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
   },
 });
 

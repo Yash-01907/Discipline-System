@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface IHabit extends Document {
+  user: mongoose.Schema.Types.ObjectId;
   title: string;
   description: string;
   type: "recurring" | "one-time";
@@ -10,10 +11,17 @@ export interface IHabit extends Document {
   completedDates: Date[];
   active: boolean;
   createdAt: Date;
+  strictness: "low" | "medium" | "high";
+  isPublic: boolean;
 }
 
 const HabitSchema: Schema = new Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
     title: {
       type: String,
       required: true,
@@ -46,6 +54,15 @@ const HabitSchema: Schema = new Schema(
     active: {
       type: Boolean,
       default: true,
+    },
+    strictness: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+    },
+    isPublic: {
+      type: Boolean,
+      default: false, // Private by default for user safety
     },
   },
   {

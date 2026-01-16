@@ -14,6 +14,7 @@ import { RootStackParamList } from "../types/navigation";
 import { useHabits } from "../hooks/useHabits";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { HabitListSkeleton } from "../components/Skeleton";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -90,9 +91,13 @@ const HomeScreen = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        {renderHeader()}
+        <View style={styles.scrollContent}>
+          <Text style={styles.sectionTitle}>TODAY'S GOALS</Text>
+          <HabitListSkeleton count={3} />
+        </View>
+      </SafeAreaView>
     );
   }
 

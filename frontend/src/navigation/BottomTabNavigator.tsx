@@ -6,6 +6,8 @@ import ProfileScreen from "../screens/ProfileScreen";
 import { COLORS, FONTS } from "../constants/theme";
 import { Platform, Text } from "react-native";
 
+import CommunityScreen from "../screens/CommunityScreen";
+
 const Tab = createBottomTabNavigator();
 
 // Simple Icon component fallback since we might not have vector icons installed, or just use Text emojis for MVP
@@ -14,6 +16,9 @@ const TabIcon = ({ focused, name }: { focused: boolean; name: string }) => {
   switch (name) {
     case "Home":
       icon = "🏠";
+      break;
+    case "Community":
+      icon = "🌍";
       break;
     case "Calendar":
       icon = "📅";
@@ -56,6 +61,7 @@ const BottomTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Community" component={CommunityScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

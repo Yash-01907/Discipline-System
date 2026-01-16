@@ -92,10 +92,13 @@ const VerifyScreen = ({ route, navigation }: Props) => {
         },
         onError: (error: any) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          Alert.alert(
-            "Error",
-            error.response?.data?.feedback || "Submission failed"
-          );
+          // Check for specific backend feedback or default to detailed error
+          const errorMessage =
+            error.response?.data?.feedback ||
+            error.response?.data?.message ||
+            `Submission failed (${error.response?.status || "Network Error"})`;
+
+          Alert.alert("Submission Failed", errorMessage);
         },
       }
     );

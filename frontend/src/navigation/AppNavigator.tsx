@@ -7,9 +7,31 @@ import VerifyScreen from "../screens/VerifyScreen";
 import HabitDetailsScreen from "../screens/HabitDetailsScreen";
 import { COLORS } from "../constants/theme";
 
+import { useAuth } from "../context/AuthContext";
+import LoginScreen from "../screens/LoginScreen";
+import RegisterScreen from "../screens/RegisterScreen";
+import { ActivityIndicator, View } from "react-native";
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: COLORS.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -18,13 +40,21 @@ const AppNavigator = () => {
         animation: "slide_from_right",
       }}
     >
-      {/* Main entry is now the Bottom Tabs */}
-      <Stack.Screen name="Home" component={BottomTabNavigator} />
-
-      {/* Other screens are pushed on top of tabs */}
-      <Stack.Screen name="CreateHabit" component={CreateHabitScreen} />
-      <Stack.Screen name="Verify" component={VerifyScreen} />
-      <Stack.Screen name="HabitDetails" component={HabitDetailsScreen} />
+      {user ? (
+        <>
+          {/* Main App Stack */}
+          <Stack.Screen name="Home" component={BottomTabNavigator} />
+          <Stack.Screen name="CreateHabit" component={CreateHabitScreen} />
+          <Stack.Screen name="Verify" component={VerifyScreen} />
+          <Stack.Screen name="HabitDetails" component={HabitDetailsScreen} />
+        </>
+      ) : (
+        <>
+          {/* Auth Stack */}
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+        </>
+      )}
     </Stack.Navigator>
   );
 };

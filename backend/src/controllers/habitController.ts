@@ -3,10 +3,12 @@ import Habit from "../models/Habit";
 
 // @desc    Get all habits
 // @route   GET /api/habits
-// @access  Public (for MVP)
-export const getHabits = async (req: Request, res: Response) => {
+// @access  Private
+export const getHabits = async (req: any, res: Response) => {
   try {
-    const habits = await Habit.find().sort({ createdAt: -1 });
+    const habits = await Habit.find({ user: req.user.id }).sort({
+      createdAt: -1,
+    });
     res.json(habits);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
@@ -15,17 +17,28 @@ export const getHabits = async (req: Request, res: Response) => {
 
 // @desc    Create a new habit
 // @route   POST /api/habits
-// @access  Public (for MVP)
-export const createHabit = async (req: Request, res: Response) => {
+// @access  Private
+export const createHabit = async (req: any, res: Response) => {
   try {
-    const { title, description, frequency, type, targetDate } = req.body;
-
-    const habit = await Habit.create({
+    const {
       title,
       description,
       frequency,
       type,
       targetDate,
+      strictness,
+      isPublic,
+    } = req.body;
+
+    const habit = await Habit.create({
+      user: req.user.id,
+      title,
+      description,
+      frequency,
+      type,
+      targetDate,
+      strictness: strictness || "medium",
+      isPublic: isPublic || false,
     });
 
     res.status(201).json(habit);

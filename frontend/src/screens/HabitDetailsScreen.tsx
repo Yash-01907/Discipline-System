@@ -15,6 +15,7 @@ import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSubmissions } from "../hooks/useSubmissions";
 import HabitInsights from "../components/HabitInsights";
+import { HabitDetailsSkeleton } from "../components/Skeleton";
 
 type Props = NativeStackScreenProps<RootStackParamList, "HabitDetails">;
 
@@ -46,9 +47,20 @@ const HabitDetailsScreen = ({ route, navigation }: Props) => {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Text style={styles.backButtonText}>← </Text>
+          </TouchableOpacity>
+          <Text style={styles.title} numberOfLines={1}>
+            {habitTitle}
+          </Text>
+        </View>
+        <HabitDetailsSkeleton />
+      </SafeAreaView>
     );
   }
 

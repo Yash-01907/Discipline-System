@@ -1,50 +1,83 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
-import { useHabits } from "../hooks/useHabits";
-import { LineChart } from "react-native-chart-kit";
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  ActivityIndicator,
+  TouchableOpacity,
+} from "react-native";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useUserStats } from "../hooks/useHabits";
+import { useAuth } from "../context/AuthContext";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const ProfileScreen = () => {
-  const { data: habits } = useHabits();
+  const { data: stats, isLoading } = useUserStats();
+  const { logout } = useAuth(); // Add logout button potentially
 
-  const stats = useMemo(() => {
-    if (!habits || habits.length === 0)
-      return {
-        overall: 0,
-        chartData: [0, 0, 0, 0, 0, 0],
-        labels: ["S", "M", "T", "W", "T", "F"],
-      };
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: COLORS.background,
+        }}
+      >
+        <ActivityIndicator color={COLORS.primary} size="large" />
+      </View>
+    );
+  }
 
-    // Mocking analytics for MVP visualization
-    // In real app, we iterate over Submission logs.
-    const totalStreaks = habits.reduce((acc, h) => acc + h.currentStreak, 0);
-    // Assuming average potential is higher, just a dummy calculation
-    const overallRate = Math.min(
-      100,
-      Math.round((totalStreaks / (habits.length * 10 || 1)) * 100)
-    ); // normalized dummy
-
-    return {
-      overall: overallRate,
-      chartData: [20, 45, 28, 80, 99, 43], // Placeholder for "Completion rates over time"
-      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-    };
-  }, [habits]);
+  const score = stats?.disciplineScore || 0;
+  const globalStreak = stats?.globalStreak || 0;
+  const totalCompleted = stats?.totalCompleted || 0;
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>Dashboard</Text>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: SPACING.l,
+        }}
+      >
+        <Text style={[styles.header, { marginBottom: 0 }]}>Dashboard</Text>
+        <TouchableOpacity onPress={logout}>
+          <Text style={{ color: COLORS.primary, fontWeight: "bold" }}>
+            LOG OUT
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.statCard}>
-        <Text style={styles.statLabel}>Overall Discipline</Text>
-        <Text style={styles.statValue}>{stats.overall}%</Text>
+        <Text style={styles.statLabel}>Discipline Score</Text>
+        <Text style={styles.statValue}>{score}</Text>
         <View style={styles.progressBarBg}>
           <View
-            style={[styles.progressBarFill, { width: `${stats.overall}%` }]}
+            style={[
+              styles.progressBarFill,
+              { width: `${Math.min(score, 100)}%` },
+            ]}
           />
+        </View>
+      </View>
+
+      <View
+        style={{ flexDirection: "row", gap: SPACING.m, marginTop: SPACING.m }}
+      >
+        <View style={[styles.statCard, { flex: 1 }]}>
+          <Text style={styles.statLabel}>Active Streak</Text>
+          <Text style={styles.statValue}>{globalStreak}</Text>
+        </View>
+        <View style={[styles.statCard, { flex: 1 }]}>
+          <Text style={styles.statLabel}>All Time</Text>
+          <Text style={styles.statValue}>{totalCompleted}</Text>
         </View>
       </View>
 
