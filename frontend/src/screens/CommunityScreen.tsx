@@ -192,6 +192,7 @@ const CommunityScreen = () => {
       queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) =>
         old ? old.filter((item) => item.userId !== userId) : []
       );
+      queryClient.invalidateQueries({ queryKey: ["communityFeed"] });
       Alert.alert("User Blocked", "User has been blocked.");
     },
     onError: (err: any) => {

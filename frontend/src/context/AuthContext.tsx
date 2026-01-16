@@ -21,6 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,8 +98,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteAccount = async () => {
+    setIsLoading(true);
+    try {
+      await client.delete("/users/me");
+      await logout();
+    } catch (error: any) {
+      console.error(
+        "Delete account failed",
+        error.response?.data || error.message
+      );
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, register, logout, deleteAccount }}
+    >
       {children}
     </AuthContext.Provider>
   );

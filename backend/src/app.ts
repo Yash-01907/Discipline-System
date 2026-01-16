@@ -8,6 +8,7 @@ import submissionRoutes from "./routes/submissionRoutes";
 import userRoutes from "./routes/userRoutes";
 import communityRoutes from "./routes/communityRoutes";
 import webhookRoutes from "./routes/webhookRoutes";
+import adminRoutes from "./routes/adminRoutes";
 import path from "path";
 import fs from "fs";
 
@@ -33,6 +34,7 @@ app.use("/api/verify", verifyRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/webhooks", webhookRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Health Check
 app.get("/", (req, res) => {

@@ -6,6 +6,7 @@ import {
   Dimensions,
   ActivityIndicator,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +17,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const ProfileScreen = () => {
   const { data: stats, isLoading } = useUserStats();
-  const { logout } = useAuth(); // Add logout button potentially
+  const { logout, deleteAccount } = useAuth(); // Add logout button potentially
 
   if (isLoading) {
     return (
@@ -89,6 +90,26 @@ const ProfileScreen = () => {
           <Text style={{ fontWeight: "bold" }}>Home</Text> tab.
         </Text>
       </View>
+
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            "Delete Account",
+            "Are you sure? This action cannot be undone and all your data will be lost.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: deleteAccount,
+              },
+            ]
+          );
+        }}
+      >
+        <Text style={styles.deleteButtonText}>Delete Account</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -175,6 +196,18 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 24,
     textAlign: "center",
+  },
+  deleteButton: {
+    marginTop: SPACING.xl,
+    padding: SPACING.m,
+    backgroundColor: COLORS.background, // or transparent
+    alignItems: "center",
+    marginBottom: SPACING.xl,
+  },
+  deleteButtonText: {
+    color: COLORS.error,
+    fontWeight: "bold",
+    fontSize: 14,
   },
 });
 

@@ -7,6 +7,23 @@ import User from "../models/User";
 export const handleRevenueCatWebhook = async (req: Request, res: Response) => {
   try {
     const { event } = req.body;
+    const authHeader = req.headers.authorization;
+    const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+
+    // Verify Secret if configured (Critical for Production)
+    if (webhookSecret) {
+      // RevenueCat/Stripe often send just the key or "Bearer <key>"
+      if (
+        !authHeader ||
+        (authHeader !== webhookSecret &&
+          authHeader !== `Bearer ${webhookSecret}`)
+      ) {
+        console.warn("Webhook Unauthorized: Invalid or missing secret");
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+    } else {
+      console.warn("REVENUECAT_WEBHOOK_SECRET not set. Webhook is vulnerable.");
+    }
 
     if (!event) {
       return res.status(400).json({ message: "Invalid payload" });

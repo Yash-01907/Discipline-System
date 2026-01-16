@@ -147,3 +147,28 @@ export const getUserStats = async (req: Request, res: Response) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Delete user account and data
+// @route   DELETE /api/users/me
+// @access  Private
+export const deleteUser = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Delete related data first
+    // 1. Delete Submissions
+    const Submission = require("../models/Submission").default;
+    await Submission.deleteMany({ user: userId });
+
+    // 2. Delete Habits
+    await Habit.deleteMany({ user: userId });
+
+    // 3. Delete User
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete User Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};

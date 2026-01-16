@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Linking,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
@@ -108,6 +109,26 @@ const RegisterScreen = () => {
               <Text style={styles.buttonText}>SIGN UP</Text>
             )}
           </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              By continuing, you agree to our{" "}
+              <Text
+                style={styles.link}
+                onPress={() => Linking.openURL("https://google.com")}
+              >
+                Terms
+              </Text>{" "}
+              and{" "}
+              <Text
+                style={styles.link}
+                onPress={() => Linking.openURL("https://google.com")}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -169,6 +190,19 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  footer: {
+    marginTop: SPACING.xl,
+    alignItems: "center",
+  },
+  footerText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+  link: {
+    color: COLORS.primary,
+    textDecorationLine: "underline",
   },
 });
 
