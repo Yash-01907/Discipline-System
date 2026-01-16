@@ -8,6 +8,7 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   plan: "free" | "pro";
+  blockedUsers: mongoose.Types.ObjectId[];
 }
 
 const userSchema = new mongoose.Schema(
@@ -30,6 +31,12 @@ const userSchema = new mongoose.Schema(
       enum: ["free", "pro"],
       default: "free",
     },
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,

@@ -5,4 +5,5 @@ export type RootStackParamList = {
   CreateHabit: undefined;
   Verify: { habitId: string; habitTitle: string };
   HabitDetails: { habitId: string; habitTitle: string };
+  Subscription: undefined;
 };

@@ -177,6 +177,23 @@ const VerifyScreen = ({ route, navigation }: Props) => {
               "You appear to be offline. Your submission has been saved and will be uploaded automatically when you're back online.",
               [{ text: "OK", onPress: () => navigation.goBack() }]
             );
+          } else if (error.response?.status === 403) {
+            // Daily Limit Reached
+            Alert.alert(
+              "Daily Limit Reached 🔒",
+              "You've used all your free AI verifications for today.",
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                  onPress: () => navigation.goBack(),
+                },
+                {
+                  text: "Upgrade to Pro 🚀",
+                  onPress: () => navigation.navigate("Subscription"),
+                },
+              ]
+            );
           } else {
             // Server error - show the error message
             const errorMessage =

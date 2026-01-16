@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Discipline needs camera access to verify your habits.",
+        "NSPhotoLibraryUsageDescription": "Select photos to verify your habits."
+      }
     },
     "android": {
       "adaptiveIcon": {

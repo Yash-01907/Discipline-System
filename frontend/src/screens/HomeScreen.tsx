@@ -59,7 +59,11 @@ const HomeScreen = () => {
       <Text style={styles.date}>{dateStr}</Text>
 
       {userStats?.usage && userStats.usage.plan === "free" && (
-        <View style={styles.usageContainer}>
+        <TouchableOpacity
+          style={styles.usageContainer}
+          onPress={() => navigation.navigate("Subscription")}
+          activeOpacity={0.8}
+        >
           <View style={styles.usageRow}>
             <Text style={styles.usageText}>
               Daily Free Verifications:{" "}
@@ -89,7 +93,7 @@ const HomeScreen = () => {
               ]}
             />
           </View>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );

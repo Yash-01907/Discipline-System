@@ -3,6 +3,8 @@ import Submission from "../models/Submission";
 import Habit from "../models/Habit";
 import Like from "../models/Like";
 import Comment from "../models/Comment";
+import User from "../models/User";
+import jwt from "jsonwebtoken";
 
 // @desc    Get public community feed
 // @route   GET /api/community/feed
@@ -10,18 +12,54 @@ import Comment from "../models/Comment";
 export const getCommunityFeed = async (req: Request, res: Response) => {
   try {
     // Get current user ID if authenticated (optional)
-    const currentUserId = (req as any).user?._id;
+    let currentUser = (req as any).user;
+
+    // Manual Token Check if not populated (since route is public)
+    if (
+      !currentUser &&
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      try {
+        const token = req.headers.authorization.split(" ")[1];
+        const decoded: any = jwt.verify(
+          token,
+          process.env.JWT_SECRET as string
+        );
+        currentUser = await User.findById(decoded.id).select("blockedUsers");
+      } catch (e) {
+        // invalid token, ignore (treat as guest)
+      }
+    }
+
+    const currentUserId = currentUser?._id;
+    let blockedUsers: any[] = [];
+
+    if (currentUser) {
+      blockedUsers = currentUser.blockedUsers || [];
+    }
 
     // 1. Find all public habits
     const publicHabits = await Habit.find({ isPublic: true }).select("_id");
     const publicHabitIds = publicHabits.map((h) => h._id);
 
     // 2. Find verified submissions for those habits
-    const submissions = await Submission.find({
-      habitId: { $in: publicHabitIds } as any,
+    // Filter:
+    // - Verified
+    // - Not Flagged
+    // - Not from Blocked Users
+    const query: any = {
+      habitId: { $in: publicHabitIds },
       aiVerificationResult: true,
       user: { $ne: null },
-    })
+      isFlagged: false, // content moderation
+    };
+
+    if (blockedUsers.length > 0) {
+      query.user = { $ne: null, $nin: blockedUsers };
+    }
+
+    const submissions = await Submission.find(query)
       .sort({ createdAt: -1 })
       .limit(50)
       .populate("habitId", "title description")
@@ -70,6 +108,7 @@ export const getCommunityFeed = async (req: Request, res: Response) => {
       habitTitle: sub.habitId?.title || "Unknown Habit",
       habitDescription: sub.habitId?.description || "",
       userName: sub.user?.name || "Anonymous",
+      userId: sub.user?._id,
       aiFeedback: sub.aiFeedback,
       timestamp: sub.createdAt,
       likeCount: likeCountMap.get(sub._id.toString()) || 0,
@@ -216,6 +255,44 @@ export const getComments = async (req: Request, res: Response) => {
     res.json(formattedComments);
   } catch (error: any) {
     console.error("Get Comments Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Report a submission
+// @route   POST /api/community/:submissionId/report
+// @access  Private
+export const reportSubmission = async (req: Request, res: Response) => {
+  try {
+    const { submissionId } = req.params;
+
+    await Submission.findByIdAndUpdate(submissionId, { isFlagged: true });
+
+    res.status(200).json({ success: true, message: "Submission reported" });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Block a user
+// @route   POST /api/community/block/:userId
+// @access  Private
+export const blockUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params; // ID of user to block
+    const currentUserId = (req as any).user._id;
+
+    if (userId === currentUserId.toString()) {
+      return res.status(400).json({ message: "Cannot block yourself" });
+    }
+
+    // Add to blockedUsers array if not already present
+    await User.findByIdAndUpdate(currentUserId, {
+      $addToSet: { blockedUsers: userId },
+    });
+
+    res.status(200).json({ success: true, message: "User blocked" });
+  } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
 };

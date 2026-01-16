@@ -6,6 +6,7 @@ export interface FeedItem {
   habitTitle: string;
   habitDescription: string;
   userName: string;
+  userId?: string;
   aiFeedback: string;
   timestamp: string;
   likeCount: number;
@@ -50,5 +51,19 @@ export const fetchComments = async (
   const { data } = await client.get(
     `/community/${submissionId}/comments?skip=${skip}&limit=${limit}`
   );
+  return data;
+};
+
+export const reportSubmission = async (
+  submissionId: string
+): Promise<{ success: boolean; message: string }> => {
+  const { data } = await client.post(`/community/${submissionId}/report`);
+  return data;
+};
+
+export const blockUser = async (
+  userId: string
+): Promise<{ success: boolean; message: string }> => {
+  const { data } = await client.post(`/community/block/${userId}`);
   return data;
 };

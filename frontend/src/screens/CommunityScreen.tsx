@@ -12,6 +12,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -22,6 +23,8 @@ import {
   toggleLike,
   addComment,
   fetchComments,
+  reportSubmission,
+  blockUser,
 } from "../api/community";
 import { COLORS, SPACING, FONTS } from "../constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -168,6 +171,73 @@ const CommunityScreen = () => {
     });
   }, [commentText, selectedSubmission, commentMutation]);
 
+  // Report Mutation
+  const reportMutation = useMutation({
+    mutationFn: reportSubmission,
+    onSuccess: (_, submissionId) => {
+      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) =>
+        old ? old.filter((item) => item._id !== submissionId) : []
+      );
+      Alert.alert("Reported", "Content has been reported and hidden.");
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err.message || "Failed to report.");
+    },
+  });
+
+  // Block Mutation
+  const blockMutation = useMutation({
+    mutationFn: blockUser,
+    onSuccess: (_, userId) => {
+      queryClient.setQueryData<FeedItem[]>(["communityFeed"], (old) =>
+        old ? old.filter((item) => item.userId !== userId) : []
+      );
+      Alert.alert("User Blocked", "User has been blocked.");
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err.message || "Failed to block user.");
+    },
+  });
+
+  const showOptions = useCallback(
+    (item: FeedItem) => {
+      Alert.alert("Options", undefined, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Report Post",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert("Confirm", "Report this post?", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Report",
+                style: "destructive",
+                onPress: () => reportMutation.mutate(item._id),
+              },
+            ]);
+          },
+        },
+        {
+          text: "Block User",
+          style: "destructive",
+          onPress: () => {
+            if (item.userId) {
+              Alert.alert("Confirm", `Block ${item.userName}?`, [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Block",
+                  style: "destructive",
+                  onPress: () => blockMutation.mutate(item.userId!),
+                },
+              ]);
+            }
+          },
+        },
+      ]);
+    },
+    [reportMutation, blockMutation]
+  );
+
   if (isLoading) {
     return (
       <View style={styles.center}>
@@ -195,10 +265,19 @@ const CommunityScreen = () => {
       <Image source={{ uri: item.imageUrl }} style={styles.image} />
       <View style={styles.cardContent}>
         <View style={styles.headerRow}>
-          <Text style={styles.userName}>{item.userName}</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>✓ VERIFIED</Text>
+          <View style={styles.userInfoRow}>
+            <Text style={styles.userName}>{item.userName}</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>✓ VERIFIED</Text>
+            </View>
           </View>
+          <TouchableOpacity
+            onPress={() => showOptions(item)}
+            style={styles.optionsButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.optionsIcon}>⋮</Text>
+          </TouchableOpacity>
         </View>
         <Text style={styles.habitTitle}>{item.habitTitle}</Text>
         <View style={styles.verdictContainer}>
@@ -405,6 +484,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: SPACING.s,
+  },
+  userInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.s,
+  },
+  optionsButton: {
+    padding: 4,
+  },
+  optionsIcon: {
+    fontSize: 20,
+    color: COLORS.textSecondary,
+    fontWeight: "bold",
   },
   userName: {
     fontSize: 14,

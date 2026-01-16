@@ -10,6 +10,7 @@ import { COLORS } from "../constants/theme";
 import { useAuth } from "../context/AuthContext";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import SubscriptionScreen from "../screens/SubscriptionScreen";
 import { ActivityIndicator, View } from "react-native";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -47,6 +48,11 @@ const AppNavigator = () => {
           <Stack.Screen name="CreateHabit" component={CreateHabitScreen} />
           <Stack.Screen name="Verify" component={VerifyScreen} />
           <Stack.Screen name="HabitDetails" component={HabitDetailsScreen} />
+          <Stack.Screen
+            name="Subscription"
+            component={SubscriptionScreen}
+            options={{ presentation: "modal" }}
+          />
         </>
       ) : (
         <>

@@ -12,6 +12,7 @@ export interface ISubmission extends Document {
   appealReason?: string;
   appealedAt?: Date;
   appealStatus: "none" | "pending" | "approved" | "rejected";
+  isFlagged: boolean;
 }
 
 const SubmissionSchema: Schema = new Schema(
@@ -58,6 +59,10 @@ const SubmissionSchema: Schema = new Schema(
       type: String,
       enum: ["none", "pending", "approved", "rejected"],
       default: "none",
+    },
+    isFlagged: {
+      type: Boolean,
+      default: false,
     },
   },
   {
